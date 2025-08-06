@@ -10,23 +10,10 @@
   "observability": {
     "enabled": true
   },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "SESSION_DURABLE_OBJECT",
-        "class_name": "SessionDurableObject"
-      }
-    ]
-  },
   "vars": {
-    "WEBAUTHN_APP_NAME": "__change_me__"
+    "CLOUDFLARE_ACCESS_DOMAIN": "__optional_for_production__",
+    "CLOUDFLARE_ACCESS_AUD": "__optional_for_production__"
   },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["SessionDurableObject"]
-    }
-  ],
   "d1_databases": [
     {
       "binding": "DB",

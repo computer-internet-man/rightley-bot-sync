@@ -1,0 +1,56 @@
+-- CreateTable
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "username" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "PatientBrief" (
+    "patientId" TEXT NOT NULL PRIMARY KEY,
+    "fullName" TEXT NOT NULL,
+    "dob" DATETIME NOT NULL,
+    "sexAtBirth" TEXT NOT NULL,
+    "problemList" TEXT NOT NULL,
+    "activeMeds" TEXT NOT NULL,
+    "allergies" TEXT NOT NULL,
+    "lastVisit" DATETIME,
+    "preferences" TEXT,
+    "summaryBlob" TEXT NOT NULL,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "DoctorSettings" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT DEFAULT 1,
+    "tone" TEXT NOT NULL,
+    "signOff" TEXT NOT NULL,
+    "maxWords" INTEGER NOT NULL,
+    "readingLevel" TEXT,
+    "disclaimer" TEXT,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "AuditLog" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "patientId" TEXT NOT NULL,
+    "staffId" TEXT NOT NULL,
+    "requestText" TEXT NOT NULL,
+    "draftAi" TEXT NOT NULL,
+    "finalText" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "providerMsgId" TEXT,
+    "deliveryStatus" TEXT NOT NULL DEFAULT 'pending',
+    "deliveredAt" DATETIME,
+    CONSTRAINT "AuditLog_staffId_fkey" FOREIGN KEY ("staffId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");

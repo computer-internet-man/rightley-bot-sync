@@ -24,20 +24,107 @@ datasource db {
 model User {
   id          String      @id @default(uuid()) // User ID (UUID-based)
   username    String      @unique
+  email       String      @unique
+  role        String      // staff, reviewer, doctor, admin, auditor
   createdAt   DateTime    @default(now())
 
-  credentials Credential[] // Relationship: One user can have many credentials
+  auditLogs      AuditLog[]       // Relationship: One user can have many audit logs
+  patientBriefs  PatientBrief[]   // Relationship: Doctor can have many patient briefs
+  doctorSettings DoctorSettings?  // Relationship: Doctor can have settings
 }
 
-model Credential {
-  id            String   @id @default(uuid()) // Internal DB ID
-  userId        String   @unique // Every credential is linked to a specific user
-  user          User     @relation(fields: [userId], references: [id])
-  createdAt     DateTime @default(now())
-  credentialId  String   @unique // WebAuthn credential identifier
-  publicKey     Bytes
-  counter       Int      @default(0)
-  
-  @@index([credentialId])
+model PatientBrief {
+  id               String   @id @default(uuid())
+  patientName      String
+  briefText        String
+  medicalHistory   String
+  currentMedications String
+  allergies        String
+  doctorNotes      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  doctorId         String
+  doctor           User     @relation(fields: [doctorId], references: [id])
+
+  @@index([doctorId])
+}
+
+model DoctorSettings {
+  id             String   @id @default(uuid())
+  doctorId       String   @unique
+  doctor         User     @relation(fields: [doctorId], references: [id])
+  communicationTone String
+  signOff        String
+  maxWords       Int
+  readingLevel   String?
+  specialtyFocus String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([doctorId])
+}
+
+model AuditLog {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  patientName       String
+  patientId         String?  // Reference to patient brief
+  requestText       String
+  generatedDraft    String
+  finalMessage      String
+  actionType        String   // draft_generated, draft_edited, submitted_for_review, reviewed, sent, delivery_confirmed, delivery_failed
+  deliveryStatus    String   @default("pending") // pending, sent, delivered, failed, retry_scheduled
+  deliveredAt       DateTime?
+  reviewerId        String?  // ID of reviewer who approved/rejected
+  reviewNotes       String?  // Notes from reviewer
+  reviewedAt        DateTime?
+  ipAddress         String?  // For security logging
+  userAgent         String?  // For security logging
+  editHistory       String?  // JSON array of edits with timestamps
+  retryCount        Int      @default(0)
+  lastRetryAt       DateTime?
+  failureReason     String?  // Error message for failed deliveries
+  contentHash       String?  // For data integrity verification
+  aiModelUsed       String?  // OpenAI model version used
+  tokensConsumed    Int?     // API usage tracking
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  messageQueue      MessageQueue? // One-to-one relation with MessageQueue
+
   @@index([userId])
+  @@index([createdAt])
+  @@index([actionType])
+  @@index([deliveryStatus])
+  @@index([patientId])
+  @@index([reviewerId])
+}
+
+model MessageQueue {
+  id                String   @id @default(uuid())
+  auditLogId        String   @unique
+  auditLog          AuditLog @relation(fields: [auditLogId], references: [id])
+  recipientEmail    String?
+  recipientPhone    String?
+  messageContent    String
+  deliveryMethod    String   // email, sms, portal
+  priority          String   @default("normal") // low, normal, high, urgent
+  scheduledFor      DateTime?
+  attempts          Int      @default(0)
+  maxAttempts       Int      @default(3)
+  status            String   @default("queued") // queued, processing, sent, delivered, failed, cancelled
+  lastAttemptAt     DateTime?
+  nextRetryAt       DateTime?
+  errorLog          String?  // JSON array of error messages
+  deliveryConfirmed Boolean  @default(false)
+  confirmedAt       DateTime?
+  webhookData       String?  // Store webhook response data
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([nextRetryAt])
+  @@index([priority])
 }
