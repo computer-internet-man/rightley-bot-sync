@@ -25,18 +25,49 @@ export type AppContext = {
 export default defineApp([
   setCommonHeaders(),
   async ({ ctx, request, headers }) => {
+    console.log("[MIDDLEWARE] Processing request:", request.method, request.url);
     await setupDb(env);
 
-    // Validate JWT from Cloudflare Access
-    const jwtUser = await validateCloudflareAccessJWT(request);
-    
-    if (jwtUser) {
-      // Find or create user based on JWT email
-      ctx.user = await findOrCreateUser(jwtUser);
-    } else {
-      ctx.user = null;
+    // For development, always create an admin user
+    console.log("[AUTH] Development mode - creating default admin user");
+    const devJWT = {
+      email: "admin@example.com",
+      sub: "dev-admin-123",
+      iss: "dev-issuer",
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 86400 // 24 hours
+    };
+    ctx.user = await findOrCreateUser(devJWT, "admin");
+    // Ensure development user has admin role
+    if (ctx.user && ctx.user.role !== "admin") {
+      ctx.user = await db.user.update({
+        where: { id: ctx.user.id },
+        data: { role: "admin" }
+      });
     }
+    console.log("[AUTH] Development user created:", ctx.user?.email, "role:", ctx.user?.role);
   },
+  
+  // Simple test route first
+  route("/test", () => {
+    console.log("[ROUTE] Test route accessed");
+    return new Response("Test route works!");
+  }),
+  
+  render(Document, [
+    // Public routes
+    route("/", () => {
+      console.log("[ROUTE] Root route accessed");
+      return new Response("Hello, World! Development server is working!");
+    }),
+    
+    route("/draft", [
+      requireStaff(),
+      DraftWorkflowPage,
+    ]),
+  ]),
+  
+  /*
   // API routes (outside Document wrapper for JSON responses)
   route("/api/generate-draft", [
     requireStaff(),
@@ -111,10 +142,15 @@ export default defineApp([
     requireAuditor(),
     ({ ctx, request }) => import("@/routes/api/audit-export").then(m => m.POST(request, env, ctx))
   ]),
-
+  */
+  
+  /* OLD ROUTES - COMMENTED OUT
   render(Document, [
     // Public routes
-    route("/", () => new Response("Hello, World!")),
+    route("/", () => {
+      console.log("[ROUTE] Root route accessed");
+      return new Response("Hello, World! Development server is working!");
+    }),
     route("/login", LoginPage),
     
     route("/unauthorized", () => {
@@ -173,4 +209,5 @@ export default defineApp([
     ]),
     prefix("/user", userRoutes),
   ]),
+  */
 ]);

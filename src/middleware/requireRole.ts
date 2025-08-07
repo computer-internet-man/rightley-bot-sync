@@ -3,7 +3,9 @@ import { type AppContext } from "@/worker";
 
 export function requireRole(role: UserRole) {
   return ({ ctx }: { ctx: AppContext }) => {
+    console.log("[ROLE CHECK] Checking role:", role, "User:", ctx.user?.email, "User role:", ctx.user?.role);
     if (!ctx.user) {
+      console.log("[ROLE CHECK] No user found, redirecting to unauthorized");
       return new Response(null, {
         status: 302,
         headers: { Location: "/unauthorized" },

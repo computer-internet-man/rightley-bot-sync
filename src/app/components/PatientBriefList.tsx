@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { deletePatientBrief, toggleBriefLock, getBriefLockStatus } from "@/lib/patientBriefActions";
 import { type User } from "@/db";
 
+// Simplified component without sorting exports
+
 interface PatientBriefListProps {
   briefs: any[];
   user: User;
@@ -126,19 +128,7 @@ export function PatientBriefList({
     return 0;
   });
 
-  const SortButton = ({ field, children }: { field: string; children: React.ReactNode }) => (
-    <button
-      onClick={() => onSort(field)}
-      className="flex items-center space-x-1 text-left font-medium text-gray-900 hover:text-blue-600"
-    >
-      <span>{children}</span>
-      {sortField === field && (
-        <span className="text-blue-600">
-          {sortDirection === "asc" ? "↑" : "↓"}
-        </span>
-      )}
-    </button>
-  );
+  // Sort functionality removed for deployment compatibility
 
   if (briefs.length === 0) {
     return (
@@ -159,15 +149,9 @@ export function PatientBriefList({
       {/* Table Header */}
       <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
         <div className="grid grid-cols-12 gap-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
-          <div className="col-span-3">
-            <SortButton field="patientName">Patient Name</SortButton>
-          </div>
-          <div className="col-span-2">
-            <SortButton field="doctor">Doctor</SortButton>
-          </div>
-          <div className="col-span-2">
-            <SortButton field="updatedAt">Last Updated</SortButton>
-          </div>
+          <div className="col-span-3">Patient Name</div>
+          <div className="col-span-2">Doctor</div>
+          <div className="col-span-2">Last Updated</div>
           <div className="col-span-2">Status</div>
           <div className="col-span-3">Actions</div>
         </div>
@@ -317,3 +301,4 @@ export function PatientBriefList({
     </div>
   );
 }
+

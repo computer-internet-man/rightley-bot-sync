@@ -203,32 +203,27 @@ export async function createAuditLog(
 // Staff Assignment Operations (for draft workflow)
 export async function getAssignedPatients(user: User) {
   // In a real system, you'd have a separate PatientAssignment table
-  // For now, we'll simulate this with patient briefs
-  if (user.role === "staff" || user.role === "reviewer") {
-    // For demo purposes, return some mock assigned patients
-    return [
-      {
-        id: "patient-1",
-        name: "Maria Rodriguez",
-        condition: "Diabetes management, medication refill",
-        lastContact: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        status: "active",
-      },
-      {
-        id: "patient-2", 
-        name: "James Wilson",
-        condition: "Asthma follow-up, symptom check",
-        lastContact: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
-        status: "pending_review",
-      },
-      {
-        id: "patient-3",
-        name: "Eleanor Chen", 
-        condition: "COPD education request",
-        lastContact: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-        status: "active",
-      },
-    ];
+  // For now, we'll use patient briefs from the database
+  if (user.role === "staff" || user.role === "reviewer" || user.role === "doctor" || user.role === "admin") {
+    try {
+      // Get patient briefs from database and transform them for the draft workflow
+      const patientBriefs = await db.patientBrief.findMany({
+        orderBy: { updatedAt: 'desc' }
+      });
+
+      const transformedPatients = patientBriefs.map(brief => ({
+        id: brief.id,
+        name: brief.patientName,
+        condition: brief.briefText,
+        lastContact: brief.updatedAt,
+        status: "active", // You could derive this from recent audit logs
+      }));
+      return transformedPatients;
+    } catch (error) {
+      console.error("Failed to fetch patient briefs:", error);
+      // Fallback to empty array if database query fails
+      return [];
+    }
   }
   
   return [];

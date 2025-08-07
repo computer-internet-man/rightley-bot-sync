@@ -1,9 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "__change_me__",
+  "name": "ai-concierge-mvp",
   "main": "src/worker.tsx",
   "compatibility_date": "2024-09-23",
   "compatibility_flags": ["nodejs_compat"],
+  "subdomain": "ai-concierge-mvp",
   "assets": {
     "binding": "ASSETS"
   },
@@ -17,8 +18,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "__change_me__",
-      "database_id": "__change_me__"
+      "database_name": "ai-concierge-db",
+      "database_id": "7a150e85-9100-4c0c-a354-5e7c55d61dc8"
     }
   ]
 }

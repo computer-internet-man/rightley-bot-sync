@@ -27,22 +27,24 @@
     "prepare": "vibe-rules install cursor"
   },
   "dependencies": {
-    "@prisma/adapter-d1": "~6.8.2",
-    "@prisma/client": "~6.8.2",
+    "@prisma/adapter-d1": "~6.13.0",
+    "@prisma/client": "~6.13.0",
     "better-sqlite3": "^12.2.0",
     "jose": "^6.0.12",
     "openai": "^5.12.0",
     "rwsdk": "0.0.88"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
-    "prisma": "~6.8.2",
-    "typescript": "^5.8.3",
-    "vibe-rules": "^0.2.31",
+    "@cloudflare/workers-types": "^4.20250807.0",
+    "@types/node": "^24.2.0",
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "prisma": "~6.13.0",
+    "typescript": "^5.9.2",
+    "vibe-rules": "^0.3.85",
     "vite": "^6.2.6",
-    "wrangler": "^4.16.0"
+    "vite-plugin-wasm": "^3.5.0",
+    "wrangler": "^4.28.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

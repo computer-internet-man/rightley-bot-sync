@@ -107,6 +107,11 @@ export function DraftMessagePanel({ user, selectedPatient }: DraftMessagePanelPr
 
     try {
       // Create audit log entry for the generated draft
+      if (!selectedPatient) {
+        setError("No patient selected");
+        return;
+      }
+
       const auditResponse = await fetch('/api/audit-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,9 +126,9 @@ export function DraftMessagePanel({ user, selectedPatient }: DraftMessagePanelPr
         })
       });
 
-      const auditResult = await auditResponse.json();
+      const auditResult = await auditResponse.json() as { success: boolean; auditLog?: { id: string }; error?: string };
       
-      if (auditResult.success) {
+      if (auditResult.success && auditResult.auditLog) {
         if (canUserSendMessages) {
           setSuccess("Draft created! Ready to finalize and send.");
         } else {

@@ -100,6 +100,8 @@ export function hasRole(user: { role: string }, requiredRole: UserRole): boolean
 
   const userRoleLevel = roleHierarchy[user.role as UserRole] || 0;
   const requiredRoleLevel = roleHierarchy[requiredRole] || 0;
+  
+  console.log("[HAS ROLE] User role:", user.role, "level:", userRoleLevel, "Required:", requiredRole, "level:", requiredRoleLevel, "Result:", userRoleLevel >= requiredRoleLevel);
 
   return userRoleLevel >= requiredRoleLevel;
 }

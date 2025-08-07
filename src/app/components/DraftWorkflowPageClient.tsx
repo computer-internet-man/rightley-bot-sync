@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { PatientSelectionPanel } from "./PatientSelectionPanel";
 import { DraftMessagePanel } from "./DraftMessagePanel";
 import { MessageFinalizationPanel } from "./MessageFinalizationPanel";
-import { getAssignedPatients, canSendMessages } from "@/lib/server-functions";
+import { canSendMessages } from "@/lib/server-functions";
 import { type User } from "@/db";
 
 interface Patient {
@@ -176,6 +176,7 @@ export function DraftWorkflowPageClient({ user, initialPatients }: DraftWorkflow
           user={user}
           selectedPatient={selectedPatient}
           onPatientSelect={handlePatientSelect}
+          initialPatients={initialPatients}
         />
 
         {/* Message Draft Panel */}

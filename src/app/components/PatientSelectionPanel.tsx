@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getAssignedPatients } from "@/lib/server-functions";
 import { type User } from "@/db";
 
 interface Patient {
@@ -16,19 +15,22 @@ interface PatientSelectionPanelProps {
   user: User;
   selectedPatient: Patient | null;
   onPatientSelect: (patient: Patient) => void;
+  initialPatients: Patient[];
 }
 
-export function PatientSelectionPanel({ user, selectedPatient, onPatientSelect }: PatientSelectionPanelProps) {
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
+export function PatientSelectionPanel({ user, selectedPatient, onPatientSelect, initialPatients }: PatientSelectionPanelProps) {
+  const [patients, setPatients] = useState<Patient[]>(initialPatients);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
+  const [filteredPatients, setFilteredPatients] = useState<Patient[]>(initialPatients);
   const [showPatientModal, setShowPatientModal] = useState(false);
   const [selectedForDetails, setSelectedForDetails] = useState<Patient | null>(null);
 
   useEffect(() => {
-    loadPatients();
-  }, [user]);
+    // Update patients when initialPatients changes
+    setPatients(initialPatients);
+    setFilteredPatients(initialPatients);
+  }, [initialPatients]);
 
   useEffect(() => {
     // Filter patients based on search query
@@ -42,18 +44,6 @@ export function PatientSelectionPanel({ user, selectedPatient, onPatientSelect }
       setFilteredPatients(patients);
     }
   }, [searchQuery, patients]);
-
-  const loadPatients = async () => {
-    try {
-      const assignedPatients = await getAssignedPatients(user);
-      setPatients(assignedPatients);
-      setFilteredPatients(assignedPatients);
-    } catch (error) {
-      console.error("Failed to load patients:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handlePatientClick = (patient: Patient) => {
     onPatientSelect(patient);
