@@ -56,38 +56,60 @@ export async function generateDraftAction(
       return { success: false, error: 'Patient brief not found' };
     }
 
-    // Initialize OpenAI client
-    const openai = new OpenAI({
-      apiKey: env.OPENAI_API_KEY,
-    });
+    let generatedDraft: string;
 
-    // Generate the prompt
-    const prompt = buildPrompt(patientBrief, request.patientInquiry, patientBrief.doctor.doctorSettings);
+    // Check if we have a real OpenAI API key
+    if (!env.OPENAI_API_KEY || env.OPENAI_API_KEY === "your-openai-api-key-here") {
+      // Use mock response for development/testing
+      generatedDraft = `Hello ${patientBrief.patientName},
 
-    // Call OpenAI API with HIPAA-compliant settings
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // Using faster, cost-effective model
-      messages: [
-        {
-          role: 'system',
-          content: buildSystemPrompt(patientBrief.doctor.doctorSettings)
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: patientBrief.doctor.doctorSettings?.maxWords || 300,
-      temperature: 0.3, // Lower temperature for more consistent medical communication
-      top_p: 0.9,
-      // HIPAA compliance settings
-      store: false // Don't store conversations for training
-    });
+Thank you for your inquiry about ${request.patientInquiry.toLowerCase()}. Based on your medical history and current treatment plan, I understand your concern.
 
-    const generatedDraft = completion.choices[0]?.message?.content;
+${patientBrief.currentMedications ? `I see you're currently taking: ${patientBrief.currentMedications}.` : ''}
 
-    if (!generatedDraft) {
-      return { success: false, error: 'Failed to generate draft' };
+${patientBrief.allergies && patientBrief.allergies !== 'NKDA' ? `Please remember that you have allergies to: ${patientBrief.allergies}.` : ''}
+
+${patientBrief.doctorNotes ? `Clinical notes: ${patientBrief.doctorNotes}` : ''}
+
+I recommend scheduling an appointment to discuss this further and ensure your treatment plan remains optimal.
+
+${patientBrief.doctor.doctorSettings?.signOff || 'Best regards,\nYour Healthcare Team'}`;
+
+      console.log("[MOCK DRAFT] Generated mock response for testing");
+    } else {
+      // Use real OpenAI API
+      const openai = new OpenAI({
+        apiKey: env.OPENAI_API_KEY,
+      });
+
+      // Generate the prompt
+      const prompt = buildPrompt(patientBrief, request.patientInquiry, patientBrief.doctor.doctorSettings);
+
+      // Call OpenAI API with HIPAA-compliant settings
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', // Using faster, cost-effective model
+        messages: [
+          {
+            role: 'system',
+            content: buildSystemPrompt(patientBrief.doctor.doctorSettings)
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: patientBrief.doctor.doctorSettings?.maxWords || 300,
+        temperature: 0.3, // Lower temperature for more consistent medical communication
+        top_p: 0.9,
+        // HIPAA compliance settings
+        store: false // Don't store conversations for training
+      });
+
+      generatedDraft = completion.choices[0]?.message?.content;
+
+      if (!generatedDraft) {
+        return { success: false, error: 'Failed to generate draft' };
+      }
     }
 
     // Log the action for audit purposes
