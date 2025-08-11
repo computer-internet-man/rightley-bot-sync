@@ -139,7 +139,7 @@ export default defineApp([
       return new Response(JSON.stringify({
         success: false,
         message: "Test failed with error",
-        error: error.message
+        error: (error as Error).message
       }, null, 2), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -282,6 +282,134 @@ export default defineApp([
           error: 'Invalid request' 
         }), { 
           status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ success: false, error: 'Method not allowed' }), { 
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }),
+
+  // Patient inquiry API
+  route("/api/patient-inquiry", async ({ request, ctx }) => {
+    console.log("[API] Patient inquiry called");
+    
+    if (!ctx.user) {
+      return new Response(JSON.stringify({ success: false, error: 'Authentication required' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (request.method === 'PUT') {
+      try {
+        const { updatePatientBrief } = await import('@/lib/patientBriefActions');
+        const data = await request.json() as { patientId?: string; patientInquiry?: string };
+        
+        if (!data.patientId || data.patientInquiry === undefined) {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: 'Missing patientId or patientInquiry' 
+          }), { 
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const result = await updatePatientBrief(ctx.user, data.patientId, {
+          patientInquiry: data.patientInquiry
+        });
+
+        if (result.error) {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: result.error 
+          }), { 
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          brief: result.brief
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+      } catch (error) {
+        console.error('[API] Patient inquiry update error:', error);
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Failed to update patient inquiry' 
+        }), { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    } else if (request.method === 'GET') {
+      try {
+        const url = new URL(request.url);
+        const patientId = url.searchParams.get('patientId');
+        
+        if (!patientId) {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: 'Patient ID is required' 
+          }), { 
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const brief = await db.patientBrief.findUnique({
+          where: { id: patientId },
+          select: {
+            id: true,
+            patientName: true,
+            patientInquiry: true,
+            doctorId: true
+          }
+        });
+
+        if (!brief) {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: 'Patient not found' 
+          }), { 
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Check if user has access to this patient
+        if (ctx.user.role === 'doctor' && brief.doctorId !== ctx.user.id) {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: 'Access denied to this patient' 
+          }), { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          patientInquiry: brief.patientInquiry || ''
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+      } catch (error) {
+        console.error('[API] Patient inquiry get error:', error);
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Failed to fetch patient inquiry' 
+        }), { 
+          status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
       }

@@ -199,7 +199,7 @@ export class AuditService {
           patientName: data.patientName,
           requestText: data.requestText,
           generatedDraft: data.generatedDraft,
-          finalMessage: data.finalMessage,
+          finalMessage: data.finalMessage || '',
           actionType: data.actionType,
           deliveryStatus: data.deliveryStatus || 'pending',
           deliveredAt: data.deliveredAt,
@@ -261,8 +261,8 @@ export class AuditService {
    * Only auditors and admins can access comprehensive stats
    */
   static async getAuditStats(
-    dateRange?: { start: Date; end: Date },
-    user: User
+    user: User,
+    dateRange?: { start: Date; end: Date }
   ) {
     if (!hasRole(user, 'auditor')) {
       throw new Error('Only auditors and administrators can access audit statistics');

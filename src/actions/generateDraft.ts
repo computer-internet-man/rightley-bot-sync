@@ -56,7 +56,7 @@ export async function generateDraftAction(
       return { success: false, error: 'Patient brief not found' };
     }
 
-    let generatedDraft: string;
+    let generatedDraft: string | null = null;
 
     // Check if we have a real OpenAI API key
     if (!env.OPENAI_API_KEY || env.OPENAI_API_KEY === "your-openai-api-key-here") {
@@ -105,14 +105,40 @@ ${patientBrief.doctor.doctorSettings?.signOff || 'Best regards,\nYour Healthcare
         store: false // Don't store conversations for training
       });
 
-      generatedDraft = completion.choices[0]?.message?.content;
+      const content = completion.choices[0]?.message?.content;
+      generatedDraft = content || null;
 
       if (!generatedDraft) {
         return { success: false, error: 'Failed to generate draft' };
       }
+
+      // Log the action for audit purposes
+      await db.auditLog.create({
+        data: {
+          userId: request.userId,
+          patientName: patientBrief.patientName,
+          requestText: request.patientInquiry,
+          generatedDraft: generatedDraft,
+          finalMessage: '', // Will be updated when message is finalized
+          actionType: 'draft_generated',
+          deliveryStatus: 'draft',
+          aiModelUsed: 'gpt-4o-mini',
+          tokensConsumed: completion.usage?.total_tokens || 0
+        }
+      });
+
+      return {
+        success: true,
+        draft: generatedDraft,
+        usage: {
+          promptTokens: completion.usage?.prompt_tokens || 0,
+          completionTokens: completion.usage?.completion_tokens || 0,
+          totalTokens: completion.usage?.total_tokens || 0
+        }
+      };
     }
 
-    // Log the action for audit purposes
+    // For mock responses, we still need to log the action
     await db.auditLog.create({
       data: {
         userId: request.userId,
@@ -121,7 +147,8 @@ ${patientBrief.doctor.doctorSettings?.signOff || 'Best regards,\nYour Healthcare
         generatedDraft: generatedDraft,
         finalMessage: '', // Will be updated when message is finalized
         actionType: 'draft_generated',
-        deliveryStatus: 'draft'
+        deliveryStatus: 'draft',
+        aiModelUsed: 'mock'
       }
     });
 
@@ -129,9 +156,9 @@ ${patientBrief.doctor.doctorSettings?.signOff || 'Best regards,\nYour Healthcare
       success: true,
       draft: generatedDraft,
       usage: {
-        promptTokens: completion.usage?.prompt_tokens || 0,
-        completionTokens: completion.usage?.completion_tokens || 0,
-        totalTokens: completion.usage?.total_tokens || 0
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0
       }
     };
 

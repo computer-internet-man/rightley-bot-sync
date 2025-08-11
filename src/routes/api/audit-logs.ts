@@ -58,7 +58,15 @@ export async function POST(request: Request, env: any, ctx: any) {
       return json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json() as {
+      patientName: string;
+      requestText: string;
+      generatedDraft: string;
+      finalMessage?: string;
+      actionType: string;
+      deliveryStatus?: string;
+      deliveredAt?: Date;
+    };
     
     const auditLog = await AuditService.createAuditLog(body, user);
 

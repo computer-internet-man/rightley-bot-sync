@@ -1,7 +1,7 @@
 import { json } from '@/lib/response';
 import { setupDb } from '@/db';
 import { getUser } from '@/lib/auth';
-import { AuditExportService } from '@/lib/services/auditExportService';
+import { AuditExportService, type ExportRequest } from '@/lib/services/auditExportService';
 
 export async function POST(request: Request, env: any, ctx: any) {
   const url = new URL(request.url);
@@ -15,7 +15,7 @@ export async function POST(request: Request, env: any, ctx: any) {
       return json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json() as ExportRequest;
 
     switch (path) {
       case '/api/audit-export/export':
@@ -36,7 +36,8 @@ export async function POST(request: Request, env: any, ctx: any) {
         return new Response(exportResult.data, { headers });
 
       case '/api/audit-export/compliance-report':
-        const { dateRange } = body;
+        const complianceBody = body as unknown as { dateRange: { start: Date; end: Date } };
+        const { dateRange } = complianceBody;
         const reportResult = await AuditExportService.generateComplianceReport(
           {
             start: new Date(dateRange.start),
@@ -48,7 +49,8 @@ export async function POST(request: Request, env: any, ctx: any) {
         return json(reportResult);
 
       case '/api/audit-export/verify-integrity':
-        const { logIds } = body;
+        const verifyBody = body as unknown as { logIds: string[] };
+        const { logIds } = verifyBody;
         const verifyResult = await AuditExportService.verifyDataIntegrity(user, logIds);
         
         return json(verifyResult);

@@ -55,7 +55,7 @@ export function MessageReviewQueue({ user }: MessageReviewQueueProps) {
     try {
       setIsLoading(true);
       const response = await fetch('/api/message-workflow/pending-review');
-      const result = await response.json();
+      const result = await response.json() as { success: boolean; messages?: any[]; error?: string };
       
       if (result.success) {
         setPendingMessages(result.messages || []);
@@ -89,7 +89,7 @@ export function MessageReviewQueue({ user }: MessageReviewQueueProps) {
         })
       });
 
-      const result = await response.json();
+      const result = await response.json() as { success: boolean; error?: string };
       
       if (result.success) {
         setSuccess(`Message ${action}d successfully`);

@@ -28,21 +28,85 @@ export function DraftMessagePanel({ user, selectedPatient }: DraftMessagePanelPr
   const [wordCount, setWordCount] = useState(0);
   const [readingLevel, setReadingLevel] = useState("");
   const [validationIssues, setValidationIssues] = useState<string[]>([]);
+  const [isSavingInquiry, setIsSavingInquiry] = useState(false);
+  const [inquirySaveStatus, setInquirySaveStatus] = useState("");
 
   const canUserSendMessages = canSendMessages(user);
 
+  // Load patient inquiry when patient changes
   useEffect(() => {
-    // Clear form when patient changes
     if (selectedPatient) {
-      setPatientInquiry("");
+      // Clear form and load existing inquiry
       setAiResponse("");
       setError("");
       setSuccess("");
       setWordCount(0);
       setReadingLevel("");
       setValidationIssues([]);
+      setInquirySaveStatus("");
+      
+      // Load existing patient inquiry
+      loadPatientInquiry(selectedPatient.id);
+    } else {
+      setPatientInquiry("");
     }
   }, [selectedPatient]);
+
+  const loadPatientInquiry = async (patientId: string) => {
+    try {
+      const response = await fetch(`/api/patient-inquiry?patientId=${patientId}`);
+      const result = await response.json() as { success: boolean; patientInquiry?: string; error?: string };
+      
+      if (result.success) {
+        setPatientInquiry(result.patientInquiry || "");
+      }
+    } catch (error) {
+      console.error("Failed to load patient inquiry:", error);
+    }
+  };
+
+  const savePatientInquiry = async (patientId: string, inquiryText: string) => {
+    if (!patientId) return;
+    
+    setIsSavingInquiry(true);
+    try {
+      const response = await fetch('/api/patient-inquiry', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId,
+          patientInquiry: inquiryText
+        })
+      });
+      
+      const result = await response.json() as { success: boolean; error?: string };
+      
+      if (result.success) {
+        setInquirySaveStatus("Saved");
+        setTimeout(() => setInquirySaveStatus(""), 2000);
+      } else {
+        setInquirySaveStatus("Error saving");
+        setTimeout(() => setInquirySaveStatus(""), 3000);
+      }
+    } catch (error) {
+      console.error("Failed to save patient inquiry:", error);
+      setInquirySaveStatus("Error saving");
+      setTimeout(() => setInquirySaveStatus(""), 3000);
+    } finally {
+      setIsSavingInquiry(false);
+    }
+  };
+
+  // Debounced save for patient inquiry
+  useEffect(() => {
+    if (!selectedPatient || !patientInquiry) return;
+    
+    const timeoutId = setTimeout(() => {
+      savePatientInquiry(selectedPatient.id, patientInquiry);
+    }, 1000); // Save after 1 second of no typing
+    
+    return () => clearTimeout(timeoutId);
+  }, [patientInquiry, selectedPatient]);
 
   // Update analysis when response changes
   useEffect(() => {
@@ -200,15 +264,34 @@ export function DraftMessagePanel({ user, selectedPatient }: DraftMessagePanelPr
 
             {/* Patient Inquiry Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Patient Inquiry
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700">
+                  Patient Inquiry
+                </label>
+                <div className="flex items-center space-x-2">
+                  {isSavingInquiry && (
+                    <div className="flex items-center text-xs text-gray-500">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-400 mr-1"></div>
+                      Saving...
+                    </div>
+                  )}
+                  {inquirySaveStatus && (
+                    <span className={`text-xs ${
+                      inquirySaveStatus === "Saved" 
+                        ? "text-green-600" 
+                        : "text-red-600"
+                    }`}>
+                      {inquirySaveStatus}
+                    </span>
+                  )}
+                </div>
+              </div>
               <textarea
                 rows={3}
                 value={patientInquiry}
                 onChange={(e) => setPatientInquiry(e.target.value)}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter patient's message or inquiry..."
+                placeholder="Enter patient's message or inquiry... (auto-saves as you type)"
               />
             </div>
             

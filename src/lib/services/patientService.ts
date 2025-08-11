@@ -142,9 +142,9 @@ export class PatientService {
         data: {
           patientName: data.patientName,
           briefText: data.briefText,
-          medicalHistory: data.medicalHistory,
-          currentMedications: data.currentMedications,
-          allergies: data.allergies,
+          medicalHistory: data.medicalHistory || '',
+          currentMedications: data.currentMedications || '',
+          allergies: data.allergies || '',
           doctorNotes: data.doctorNotes,
           doctorId: data.doctorId,
         },
@@ -160,7 +160,7 @@ export class PatientService {
         }
       });
 
-      return brief;
+      return brief as PatientBriefWithDoctor;
     } catch (error) {
       console.error('Error creating patient brief:', error);
       throw new Error('Failed to create patient brief');

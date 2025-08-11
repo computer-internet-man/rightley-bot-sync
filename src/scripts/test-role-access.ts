@@ -36,7 +36,7 @@ export async function testRoleAccess() {
       const staffBriefs = await PatientService.getPatientBriefs(staffUser);
       console.log(`✅ Staff can access patient briefs: ${staffBriefs.length} briefs`);
     } catch (error) {
-      console.log(`❌ Staff patient brief access failed: ${error.message}`);
+      console.log(`❌ Staff patient brief access failed: ${(error as Error).message}`);
     }
 
     // Test doctor access to patient briefs
@@ -44,7 +44,7 @@ export async function testRoleAccess() {
       const doctorBriefs = await PatientService.getPatientBriefs(doctorUser);
       console.log(`✅ Doctor can access patient briefs: ${doctorBriefs.length} briefs`);
     } catch (error) {
-      console.log(`❌ Doctor patient brief access failed: ${error.message}`);
+      console.log(`❌ Doctor patient brief access failed: ${(error as Error).message}`);
     }
 
     // Test staff trying to create patient brief (should fail)
@@ -56,7 +56,7 @@ export async function testRoleAccess() {
       }, staffUser);
       console.log(`❌ Staff should not be able to create patient briefs`);
     } catch (error) {
-      console.log(`✅ Staff correctly denied patient brief creation: ${error.message}`);
+      console.log(`✅ Staff correctly denied patient brief creation: ${(error as Error).message}`);
     }
 
     // Test doctor creating patient brief (should succeed)
@@ -72,7 +72,7 @@ export async function testRoleAccess() {
       }, doctorUser);
       console.log(`✅ Doctor successfully created patient brief: ${newBrief.id}`);
     } catch (error) {
-      console.log(`❌ Doctor patient brief creation failed: ${error.message}`);
+      console.log(`❌ Doctor patient brief creation failed: ${(error as Error).message}`);
     }
 
     console.log('\n📝 Test 2: Doctor Settings Access Control');
@@ -83,7 +83,7 @@ export async function testRoleAccess() {
       const doctorSettings = await DoctorService.getDoctorSettings(doctorUser.id, doctorUser);
       console.log(`✅ Doctor can access own settings: ${doctorSettings ? 'Found' : 'Not found'}`);
     } catch (error) {
-      console.log(`❌ Doctor settings access failed: ${error.message}`);
+      console.log(`❌ Doctor settings access failed: ${(error as Error).message}`);
     }
 
     // Test staff trying to access doctor settings (should fail)
@@ -91,7 +91,7 @@ export async function testRoleAccess() {
       await DoctorService.getDoctorSettings(doctorUser.id, staffUser);
       console.log(`❌ Staff should not access doctor settings`);
     } catch (error) {
-      console.log(`✅ Staff correctly denied doctor settings access: ${error.message}`);
+      console.log(`✅ Staff correctly denied doctor settings access: ${(error as Error).message}`);
     }
 
     // Test admin accessing doctor settings (should succeed)
@@ -99,7 +99,7 @@ export async function testRoleAccess() {
       const adminAccessSettings = await DoctorService.getDoctorSettings(doctorUser.id, adminUser);
       console.log(`✅ Admin can access doctor settings: ${adminAccessSettings ? 'Found' : 'Not found'}`);
     } catch (error) {
-      console.log(`❌ Admin doctor settings access failed: ${error.message}`);
+      console.log(`❌ Admin doctor settings access failed: ${(error as Error).message}`);
     }
 
     // Test doctor updating their settings
@@ -113,7 +113,7 @@ export async function testRoleAccess() {
       }, doctorUser);
       console.log(`✅ Doctor successfully updated settings: ${updatedSettings.id}`);
     } catch (error) {
-      console.log(`❌ Doctor settings update failed: ${error.message}`);
+      console.log(`❌ Doctor settings update failed: ${(error as Error).message}`);
     }
 
     console.log('\n📝 Test 3: Audit Log Access Control');
@@ -124,7 +124,7 @@ export async function testRoleAccess() {
       const staffLogs = await AuditService.getAuditLogs({}, { page: 1, limit: 10 }, staffUser);
       console.log(`✅ Staff can access own audit logs: ${staffLogs.logs.length} logs`);
     } catch (error) {
-      console.log(`❌ Staff audit log access failed: ${error.message}`);
+      console.log(`❌ Staff audit log access failed: ${(error as Error).message}`);
     }
 
     // Test auditor accessing all audit logs
@@ -132,23 +132,23 @@ export async function testRoleAccess() {
       const auditorLogs = await AuditService.getAuditLogs({}, { page: 1, limit: 10 }, auditorUser);
       console.log(`✅ Auditor can access all audit logs: ${auditorLogs.logs.length} logs`);
     } catch (error) {
-      console.log(`❌ Auditor audit log access failed: ${error.message}`);
+      console.log(`❌ Auditor audit log access failed: ${(error as Error).message}`);
     }
 
     // Test staff trying to access audit statistics (should fail)
     try {
-      await AuditService.getAuditStats(undefined, staffUser);
+      await AuditService.getAuditStats(staffUser);
       console.log(`❌ Staff should not access audit statistics`);
     } catch (error) {
-      console.log(`✅ Staff correctly denied audit statistics access: ${error.message}`);
+      console.log(`✅ Staff correctly denied audit statistics access: ${(error as Error).message}`);
     }
 
     // Test auditor accessing audit statistics (should succeed)
     try {
-      const auditStats = await AuditService.getAuditStats(undefined, auditorUser);
+      const auditStats = await AuditService.getAuditStats(auditorUser);
       console.log(`✅ Auditor can access audit statistics: ${auditStats.totalLogs} total logs, ${auditStats.successRate}% success rate`);
     } catch (error) {
-      console.log(`❌ Auditor audit statistics access failed: ${error.message}`);
+      console.log(`❌ Auditor audit statistics access failed: ${(error as Error).message}`);
     }
 
     // Test creating audit log
@@ -163,7 +163,7 @@ export async function testRoleAccess() {
       }, staffUser);
       console.log(`✅ Staff successfully created audit log: ${newAuditLog.id}`);
     } catch (error) {
-      console.log(`❌ Staff audit log creation failed: ${error.message}`);
+      console.log(`❌ Staff audit log creation failed: ${(error as Error).message}`);
     }
 
     console.log('\n📝 Test 4: Cross-Role Access Attempts');
@@ -172,10 +172,10 @@ export async function testRoleAccess() {
     // Test reviewer trying to access audit statistics (should fail)
     if (reviewerUser) {
       try {
-        await AuditService.getAuditStats(undefined, reviewerUser);
+        await AuditService.getAuditStats(reviewerUser);
         console.log(`❌ Reviewer should not access audit statistics`);
       } catch (error) {
-        console.log(`✅ Reviewer correctly denied audit statistics: ${error.message}`);
+        console.log(`✅ Reviewer correctly denied audit statistics: ${(error as Error).message}`);
       }
     }
 
@@ -183,12 +183,12 @@ export async function testRoleAccess() {
     try {
       const [adminBriefs, adminStats, adminDoctors] = await Promise.all([
         PatientService.getPatientBriefs(adminUser),
-        AuditService.getAuditStats(undefined, adminUser),
+        AuditService.getAuditStats(adminUser),
         DoctorService.getAllDoctors(adminUser)
       ]);
       console.log(`✅ Admin has full access: ${adminBriefs.length} briefs, ${adminStats.totalLogs} audit logs, ${adminDoctors.length} doctors`);
     } catch (error) {
-      console.log(`❌ Admin full access failed: ${error.message}`);
+      console.log(`❌ Admin full access failed: ${(error as Error).message}`);
     }
 
     console.log('\n🎉 Role-Based Access Control testing completed!');

@@ -6,7 +6,9 @@ import {
   reviewMessage,
   sendMessageDirectly,
   getPendingReviewMessages,
-  updateDeliveryStatus 
+  updateDeliveryStatus,
+  type MessageFinalizationRequest,
+  type MessageReviewRequest
 } from '@/actions/messageWorkflow';
 
 export async function POST(request: Request, env: any, ctx: any) {
@@ -21,21 +23,22 @@ export async function POST(request: Request, env: any, ctx: any) {
       return json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json() as any;
 
     switch (path) {
       case '/api/message-workflow/submit-for-review':
-        return json(await submitMessageForReview(body, user, env, request));
+        return json(await submitMessageForReview(body as MessageFinalizationRequest, user, env, request));
 
       case '/api/message-workflow/review':
-        return json(await reviewMessage(body, user, env, request));
+        return json(await reviewMessage(body as MessageReviewRequest, user, env, request));
 
       case '/api/message-workflow/send-directly':
-        return json(await sendMessageDirectly(body, user, env, request));
+        return json(await sendMessageDirectly(body as MessageFinalizationRequest, user, env, request));
 
       case '/api/message-workflow/delivery-status':
         // Webhook endpoint for delivery providers
-        const { auditLogId, status, failureReason, webhookData } = body;
+        const deliveryBody = body as { auditLogId: string; status: 'delivered' | 'failed'; failureReason?: string; webhookData?: any };
+        const { auditLogId, status, failureReason, webhookData } = deliveryBody;
         return json(await updateDeliveryStatus(auditLogId, status, failureReason, webhookData, env));
 
       default:

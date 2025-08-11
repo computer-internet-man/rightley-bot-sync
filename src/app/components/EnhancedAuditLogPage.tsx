@@ -58,7 +58,7 @@ export function EnhancedAuditLogPage({ user }: EnhancedAuditLogPageProps) {
     try {
       setIsLoading(true);
       const response = await fetch('/api/audit-logs');
-      const result = await response.json();
+      const result = await response.json() as { success: boolean; logs?: any[]; error?: string };
       
       if (result.success) {
         setAuditLogs(result.logs || []);
@@ -165,7 +165,7 @@ export function EnhancedAuditLogPage({ user }: EnhancedAuditLogPageProps) {
         })
       });
 
-      const result = await response.json();
+      const result = await response.json() as { success: boolean; report?: any; error?: string };
       
       if (result.success) {
         // Display compliance report in a modal or new page

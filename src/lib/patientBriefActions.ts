@@ -15,6 +15,7 @@ const PatientBriefSchema = z.object({
   currentMedications: z.string().max(1000).default(""),
   allergies: z.string().max(500).default(""),
   doctorNotes: z.string().max(1000).default(""),
+  patientInquiry: z.string().max(2000).default(""),
 });
 
 // In-memory store for brief locks (in production, use Redis or database)
@@ -37,6 +38,7 @@ export async function createPatientBrief(user: User, data: {
   currentMedications?: string;
   allergies?: string;
   doctorNotes?: string;
+  patientInquiry?: string;
 }) {
   try {
     if (!canEditPatientBriefs(user)) {
@@ -70,6 +72,7 @@ export async function updatePatientBrief(user: User, briefId: string, data: {
   currentMedications?: string;
   allergies?: string;
   doctorNotes?: string;
+  patientInquiry?: string;
 }) {
   try {
     if (!canEditPatientBriefs(user)) {
