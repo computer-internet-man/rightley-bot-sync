@@ -1,0 +1,43 @@
+# GitHub Environment Configuration for Production
+# This file documents the production environment configuration
+# Actual environments are configured through GitHub UI or API
+
+name: production
+url: https://ai-concierge-mvp-prod.your-subdomain.workers.dev
+
+# Environment Protection Rules (configured in GitHub UI)
+# - Required reviewers: 1-2 team members with admin/maintain access
+# - Branch protection: main branch only
+# - Deployment timeout: 15 minutes
+# - Require status checks: all CI checks must pass
+# - Deployment schedule: restrict to business hours (optional)
+
+# Environment Variables (configured in GitHub UI)
+# CLOUDFLARE_API_TOKEN: <secret>
+# CLOUDFLARE_ACCOUNT_ID: <secret>
+# SENTRY_AUTH_TOKEN: <secret>
+# SENTRY_ORG: <string>
+# SENTRY_PROJECT: <string>
+# DEPLOYMENT_WEBHOOK_URL: <secret> (optional)
+
+# Environment Secrets
+# - Production Cloudflare API credentials
+# - Production database credentials
+# - Production API keys for all integrations
+# - Production monitoring and alerting tokens
+# - SSL/TLS certificates if using custom domains
+
+# Approval Process
+# 1. Staging deployment must be successful
+# 2. All status checks must pass
+# 3. Manual approval from designated reviewers
+# 4. Deployment initiated with monitoring
+# 5. Automatic rollback on failure
+
+description: |
+  Production environment for AI Concierge MVP
+  - Requires manual approval for deployment
+  - Must pass all staging tests and health checks
+  - Includes automatic rollback on failure
+  - Full monitoring and alerting enabled
+  - Source maps uploaded to Sentry for error tracking

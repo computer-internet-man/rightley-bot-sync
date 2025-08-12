@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant D as Doctor
+    participant W as Worker
+    participant AI as OpenAI
+    participant Q as Message Queue
+    participant P as Provider (Email/SMS)
+    participant DB as D1 Database
+    participant S as Sentry
+
+    Note over D,S: Message Workflow Data Flow
+
+    D->>W: Create Patient Brief
+    W->>DB: Store Brief
+    DB-->>W: Brief ID
+    
+    D->>W: Generate Draft Request
+    W->>AI: AI Generation Request
+    AI-->>W: Generated Content
+    W->>DB: Store Draft
+    W-->>D: Draft Response
+
+    D->>W: Review & Approve
+    W->>DB: Update Status
+    W->>Q: Enqueue Delivery Job
+    Q-->>W: Job Queued
+
+    Q->>P: Process Delivery
+    P-->>Q: Delivery Status
+    Q->>W: Webhook Callback
+    W->>DB: Update Delivery Status
+    W->>S: Log Completion Event
+
+    Note over D,S: Audit Trail Created for All Actions

@@ -1,0 +1,59 @@
+graph TB
+    subgraph "Network Security"
+        CF_WAF[Cloudflare WAF]
+        DDoS_Prot[DDoS Protection]
+        GeoBlock[Geo-Blocking]
+        IPFilter[IP Filtering]
+    end
+
+    subgraph "Application Security"
+        CF_Access[Cloudflare Access SSO]
+        JWT_Valid[JWT Validation]
+        RBAC_Layer[RBAC Middleware]
+        Rate_Limit[Rate Limiting]
+    end
+
+    subgraph "Data Security"
+        Encryption[Data Encryption]
+        Audit_Trail[Audit Logging]
+        PII_Handling[PII Protection]
+        HIPAA_Comp[HIPAA Compliance]
+    end
+
+    subgraph "Security Headers"
+        CSP[Content Security Policy]
+        HSTS[HTTP Strict Transport]
+        Frame_Opts[X-Frame-Options]
+        XSS_Prot[XSS Protection]
+    end
+
+    subgraph "Monitoring & Response"
+        Security_Mon[Security Monitoring]
+        Threat_Detect[Threat Detection]
+        Incident_Resp[Incident Response]
+        Sentry_Sec[Sentry Security Events]
+    end
+
+    CF_WAF --> CF_Access
+    DDoS_Prot --> CF_Access
+    GeoBlock --> CF_Access
+    IPFilter --> CF_Access
+
+    CF_Access --> JWT_Valid
+    JWT_Valid --> RBAC_Layer
+    RBAC_Layer --> Rate_Limit
+
+    Rate_Limit --> Encryption
+    Encryption --> Audit_Trail
+    Audit_Trail --> PII_Handling
+    PII_Handling --> HIPAA_Comp
+
+    HIPAA_Comp --> CSP
+    CSP --> HSTS
+    HSTS --> Frame_Opts
+    Frame_Opts --> XSS_Prot
+
+    XSS_Prot --> Security_Mon
+    Security_Mon --> Threat_Detect
+    Threat_Detect --> Incident_Resp
+    Incident_Resp --> Sentry_Sec

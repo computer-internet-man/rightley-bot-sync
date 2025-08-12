@@ -1,5 +1,6 @@
 import { jwtVerify, createRemoteJWKSet } from "jose";
-import { db } from "@/db";
+import { drizzleDb, users } from "@/db";
+import { eq } from "drizzle-orm";
 
 export type UserRole = "staff" | "doctor" | "admin" | "reviewer" | "auditor";
 
@@ -59,22 +60,27 @@ export async function validateCloudflareAccessJWT(request: Request): Promise<JWT
 export async function findOrCreateUser(jwtUser: JWTUser, defaultRole: UserRole = "staff") {
   try {
     // Try to find existing user by email
-    let user = await db.user.findUnique({
-      where: { email: jwtUser.email }
-    });
+    const [existingUser] = await drizzleDb
+      .select()
+      .from(users)
+      .where(eq(users.email, jwtUser.email))
+      .limit(1);
 
-    if (!user) {
-      // Create new user with email from JWT
-      user = await db.user.create({
-        data: {
-          email: jwtUser.email,
-          username: jwtUser.email, // Use email as username for now
-          role: defaultRole,
-        }
-      });
+    if (existingUser) {
+      return existingUser;
     }
 
-    return user;
+    // Create new user with email from JWT
+    const [newUser] = await drizzleDb
+      .insert(users)
+      .values({
+        email: jwtUser.email,
+        username: jwtUser.email, // Use email as username for now
+        role: defaultRole,
+      })
+      .returning();
+
+    return newUser;
   } catch (error) {
     console.error("Error finding or creating user:", error);
     return null;

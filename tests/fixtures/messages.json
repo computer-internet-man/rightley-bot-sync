@@ -1,0 +1,30 @@
+[
+  {
+    "id": "message-1",
+    "patientId": "patient-1",
+    "content": "Please remember to take your medication as prescribed.",
+    "status": "draft",
+    "createdBy": "test-user-1"
+  },
+  {
+    "id": "message-2",
+    "patientId": "patient-2", 
+    "content": "Your test results are ready for review.",
+    "status": "pending",
+    "createdBy": "test-user-1"
+  },
+  {
+    "id": "message-3",
+    "patientId": "patient-1",
+    "content": "Your next appointment is scheduled for next week.",
+    "status": "sent",
+    "createdBy": "test-admin-1"
+  },
+  {
+    "id": "message-4",
+    "patientId": "patient-3",
+    "content": "Please follow up with your cardiologist.",
+    "status": "delivered",
+    "createdBy": "test-user-1"
+  }
+]

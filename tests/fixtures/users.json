@@ -1,0 +1,22 @@
+[
+  {
+    "id": "test-admin-1",
+    "email": "admin@test.com",
+    "role": "admin"
+  },
+  {
+    "id": "test-user-1", 
+    "email": "user@test.com",
+    "role": "user"
+  },
+  {
+    "id": "test-viewer-1",
+    "email": "viewer@test.com",
+    "role": "viewer"
+  },
+  {
+    "id": "test-user-2",
+    "email": "user2@test.com", 
+    "role": "user"
+  }
+]

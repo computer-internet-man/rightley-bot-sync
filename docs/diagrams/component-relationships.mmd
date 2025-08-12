@@ -1,0 +1,68 @@
+graph TB
+    subgraph "Presentation Layer"
+        SSR[Server-Side Rendering]
+        RSC[React Server Components]
+        Pages[Page Components]
+        UI[UI Components]
+    end
+
+    subgraph "Application Layer"
+        MW[Middleware Stack]
+        Auth[Authentication]
+        RBAC[Role-Based Access]
+        Routes[API Routes]
+        Actions[Server Actions]
+    end
+
+    subgraph "Business Logic"
+        PatientMgmt[Patient Management]
+        MessageFlow[Message Workflows]
+        DoctorPortal[Doctor Portal]
+        AdminDash[Admin Dashboard]
+        AuditSys[Audit System]
+    end
+
+    subgraph "Data Access Layer"
+        ORM[Drizzle ORM]
+        Schema[Database Schema]
+        Migrations[Migration System]
+        Queries[Query Builders]
+    end
+
+    subgraph "Infrastructure Layer"
+        Queue[Queue Producer/Consumer]
+        Jobs[Job Processors]
+        Monitor[Monitoring]
+        Logger[Logging System]
+    end
+
+    SSR --> MW
+    RSC --> MW
+    Pages --> MW
+    UI --> MW
+
+    MW --> Auth
+    MW --> RBAC
+    MW --> Routes
+    MW --> Actions
+
+    Routes --> PatientMgmt
+    Routes --> MessageFlow
+    Routes --> DoctorPortal
+    Routes --> AdminDash
+    Routes --> AuditSys
+
+    PatientMgmt --> ORM
+    MessageFlow --> ORM
+    DoctorPortal --> ORM
+    AdminDash --> ORM
+    AuditSys --> ORM
+
+    ORM --> Schema
+    ORM --> Migrations
+    ORM --> Queries
+
+    MessageFlow --> Queue
+    Queue --> Jobs
+    Jobs --> Monitor
+    Jobs --> Logger

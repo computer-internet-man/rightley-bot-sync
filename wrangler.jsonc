@@ -4,22 +4,143 @@
   "main": "src/worker.tsx",
   "compatibility_date": "2024-09-23",
   "compatibility_flags": ["nodejs_compat"],
-  "subdomain": "ai-concierge-mvp",
   "assets": {
+    "directory": "dist",
     "binding": "ASSETS"
   },
   "observability": {
     "enabled": true
   },
-  "vars": {
-    "CLOUDFLARE_ACCESS_DOMAIN": "__optional_for_production__",
-    "CLOUDFLARE_ACCESS_AUD": "__optional_for_production__"
+  "triggers": {
+    "crons": [
+      "0 2 * * *"
+    ]
   },
+  "queues": {
+    "producers": [
+      {
+        "queue": "message-delivery",
+        "binding": "MESSAGE_QUEUE"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "message-delivery",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 5,
+        "dead_letter_queue": "dlq"
+      }
+    ]
+  },
+  "vars": {
+    "ENVIRONMENT": "local",
+    "CLOUDFLARE_ACCESS_DOMAIN": "__optional_for_production__",
+    "CLOUDFLARE_ACCESS_AUD": "__optional_for_production__",
+    "SENTRY_DSN": "",
+    "AI_STUB": "",
+    "DELIVERY_PROVIDER": "noop",
+    "SENDGRID_API_KEY": "",
+    "TWILIO_ACCOUNT_SID": "",
+    "TWILIO_AUTH_TOKEN": "",
+    "WEBHOOK_SECRET": "test-secret-for-development",
+    "SECURITY_RATE_LIMIT_IP": "100",
+    "SECURITY_RATE_LIMIT_USER": "500",
+    "SECURITY_ENABLE_WAF": "true",
+    "SECURITY_ENABLE_GEO_BLOCKING": "false",
+    "SECURITY_BLOCKED_COUNTRIES": "",
+    "SECURITY_DDOS_THRESHOLD": "1000",
+    "SECURITY_ANOMALY_THRESHOLD": "50"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMITER",
+      "id": "rate_limiter_dev",
+      "preview_id": "rate_limiter_preview"
+    },
+    {
+      "binding": "SECURITY_BLOCKLIST", 
+      "id": "security_blocklist_dev",
+      "preview_id": "security_blocklist_preview"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "ai-concierge-db",
       "database_id": "7a150e85-9100-4c0c-a354-5e7c55d61dc8"
     }
-  ]
+  ],
+  "env": {
+    "local": {
+      "name": "ai-concierge-mvp-local",
+      "vars": {
+        "ENVIRONMENT": "local",
+        "CLOUDFLARE_ACCESS_DOMAIN": "__optional_for_development__",
+        "CLOUDFLARE_ACCESS_AUD": "__optional_for_development__",
+        "SENTRY_DSN": "",
+        "AI_STUB": "1",
+        "DELIVERY_PROVIDER": "noop",
+        "SENDGRID_API_KEY": "",
+        "TWILIO_ACCOUNT_SID": "",
+        "TWILIO_AUTH_TOKEN": "",
+        "WEBHOOK_SECRET": "test-secret-for-development"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ai-concierge-db",
+          "database_id": "7a150e85-9100-4c0c-a354-5e7c55d61dc8"
+        }
+      ]
+    },
+    "dev": {
+      "name": "ai-concierge-mvp-dev",
+      "vars": {
+        "ENVIRONMENT": "dev",
+        "CLOUDFLARE_ACCESS_DOMAIN": "__optional_for_production__",
+        "CLOUDFLARE_ACCESS_AUD": "__optional_for_production__",
+        "SENTRY_DSN": ""
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "concierge_dev",
+          "database_id": "__REPLACE_WITH_DEV_DB_ID__"
+        }
+      ]
+    },
+    "staging": {
+      "name": "ai-concierge-mvp-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "CLOUDFLARE_ACCESS_DOMAIN": "__optional_for_production__",
+        "CLOUDFLARE_ACCESS_AUD": "__optional_for_production__",
+        "SENTRY_DSN": ""
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "concierge_staging",
+          "database_id": "__REPLACE_WITH_STAGING_DB_ID__"
+        }
+      ]
+    },
+    "prod": {
+      "name": "ai-concierge-mvp-prod",
+      "vars": {
+        "ENVIRONMENT": "prod",
+        "CLOUDFLARE_ACCESS_DOMAIN": "__required_for_production__",
+        "CLOUDFLARE_ACCESS_AUD": "__required_for_production__",
+        "SENTRY_DSN": ""
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "concierge_prod",
+          "database_id": "__REPLACE_WITH_PROD_DB_ID__"
+        }
+      ]
+    }
+  }
 }

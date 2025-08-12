@@ -1,0 +1,469 @@
+name: Release - Staging & Production Deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      skip_staging:
+        description: 'Skip staging and deploy directly to production'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should-deploy-staging: ${{ steps.deployment-strategy.outputs.deploy-staging }}
+      should-deploy-production: ${{ steps.deployment-strategy.outputs.deploy-production }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version
+        id: version
+        run: |
+          VERSION=$(date +"%Y%m%d-%H%M%S")-$(git rev-parse --short HEAD)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated version: ${VERSION}"
+
+      - name: Determine deployment strategy
+        id: deployment-strategy
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ github.event.inputs.skip_staging }}" == "true" ]]; then
+              echo "deploy-staging=false" >> $GITHUB_OUTPUT
+              echo "deploy-production=true" >> $GITHUB_OUTPUT
+            else
+              if [[ "${{ github.event.inputs.environment }}" == "staging" ]]; then
+                echo "deploy-staging=true" >> $GITHUB_OUTPUT
+                echo "deploy-production=false" >> $GITHUB_OUTPUT
+              else
+                echo "deploy-staging=false" >> $GITHUB_OUTPUT
+                echo "deploy-production=true" >> $GITHUB_OUTPUT
+              fi
+            fi
+          else
+            # Automatic deployment on main branch push
+            echo "deploy-staging=true" >> $GITHUB_OUTPUT
+            echo "deploy-production=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Drizzle migrations
+        run: pnpm dlx drizzle-kit generate
+
+      - name: Generate Prisma client
+        run: pnpm generate
+
+      - name: Type check
+        run: pnpm types
+
+      - name: Run unit tests
+        run: pnpm test:unit
+        env:
+          CI: true
+
+      - name: Build application
+        run: pnpm build
+        env:
+          RWSDK_DEPLOY: 1
+          SENTRY_RELEASE: ${{ needs.prepare.outputs.version }}
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/
+            node_modules/
+            drizzle/migrations/
+          key: build-${{ github.sha }}-${{ needs.prepare.outputs.version }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    if: needs.prepare.outputs.should-deploy-staging == 'true'
+    environment:
+      name: staging
+      url: https://ai-concierge-mvp-staging.your-subdomain.workers.dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/
+            node_modules/
+            drizzle/migrations/
+          key: build-${{ github.sha }}-${{ needs.prepare.outputs.version }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup staging database
+        run: |
+          # Apply migrations to staging database
+          wrangler d1 migrations apply concierge_staging --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy to staging
+        uses: cloudflare/wrangler-action@v3
+        id: deploy-staging
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env staging
+        env:
+          SENTRY_RELEASE: ${{ needs.prepare.outputs.version }}
+
+      - name: Run staging smoke tests
+        run: |
+          STAGING_URL="https://ai-concierge-mvp-staging.your-subdomain.workers.dev"
+          
+          echo "Running smoke tests against staging..."
+          
+          # Health check
+          curl -f "${STAGING_URL}/health" || exit 1
+          
+          # Basic functionality test
+          curl -f "${STAGING_URL}/" || exit 1
+          
+          # API endpoint test
+          curl -f -H "Content-Type: application/json" "${STAGING_URL}/api/messages" || exit 1
+          
+          echo "Staging smoke tests passed!"
+
+      - name: Upload source maps to Sentry (Staging)
+        run: |
+          if [[ -n "${{ secrets.SENTRY_AUTH_TOKEN }}" ]]; then
+            echo "Uploading source maps to Sentry..."
+            ./scripts/upload-sourcemaps.sh staging ${{ needs.prepare.outputs.version }}
+          else
+            echo "Sentry auth token not configured, skipping source map upload"
+          fi
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+
+      - name: Create staging deployment status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: context.payload.deployment?.id || 0,
+              state: 'success',
+              environment: 'staging',
+              environment_url: 'https://ai-concierge-mvp-staging.your-subdomain.workers.dev',
+              description: 'Staging deployment successful'
+            });
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [prepare, build, deploy-staging]
+    if: |
+      always() && 
+      needs.prepare.outputs.should-deploy-production == 'true' &&
+      (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped')
+    environment:
+      name: production
+      url: https://ai-concierge-mvp-prod.your-subdomain.workers.dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/
+            node_modules/
+            drizzle/migrations/
+          key: build-${{ github.sha }}-${{ needs.prepare.outputs.version }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Backup production database
+        run: |
+          echo "Creating production database backup..."
+          # Note: D1 doesn't support automated backups yet
+          # This is a placeholder for when the feature becomes available
+          wrangler d1 execute concierge_prod --command "SELECT 'backup-placeholder'" || true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Apply production database migrations
+        run: |
+          # Apply migrations to production database
+          wrangler d1 migrations apply concierge_prod --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy to production (Gradual Rollout)
+        uses: cloudflare/wrangler-action@v3
+        id: deploy-production
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env prod
+        env:
+          SENTRY_RELEASE: ${{ needs.prepare.outputs.version }}
+
+      - name: Wait for deployment stabilization
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 60
+          
+          PROD_URL="https://ai-concierge-mvp-prod.your-subdomain.workers.dev"
+          
+          # Health checks with retry logic
+          for i in {1..5}; do
+            if curl -f -s "${PROD_URL}/health" > /dev/null; then
+              echo "Health check $i/5: PASS"
+            else
+              echo "Health check $i/5: FAIL"
+              if [[ $i -eq 5 ]]; then
+                echo "Production health checks failed!"
+                exit 1
+              fi
+              sleep 30
+            fi
+          done
+
+      - name: Run production smoke tests
+        run: |
+          PROD_URL="https://ai-concierge-mvp-prod.your-subdomain.workers.dev"
+          
+          echo "Running production smoke tests..."
+          
+          # Health check
+          curl -f "${PROD_URL}/health" || exit 1
+          
+          # Basic functionality test
+          curl -f "${PROD_URL}/" || exit 1
+          
+          # API endpoint test (with auth if required)
+          curl -f -H "Content-Type: application/json" "${PROD_URL}/api/messages" || exit 1
+          
+          echo "Production smoke tests passed!"
+
+      - name: Upload source maps to Sentry (Production)
+        run: |
+          if [[ -n "${{ secrets.SENTRY_AUTH_TOKEN }}" ]]; then
+            echo "Uploading source maps to Sentry..."
+            ./scripts/upload-sourcemaps.sh production ${{ needs.prepare.outputs.version }}
+          else
+            echo "Sentry auth token not configured, skipping source map upload"
+          fi
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: 'v${{ needs.prepare.outputs.version }}',
+              name: 'Release v${{ needs.prepare.outputs.version }}',
+              body: `
+              ## 🚀 Production Release v${{ needs.prepare.outputs.version }}
+              
+              **Deployment Details:**
+              - **Environment**: Production
+              - **Commit**: ${context.sha}
+              - **Deployed At**: ${new Date().toISOString()}
+              - **Workflow**: [View Details](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+              
+              **URLs:**
+              - **Production**: https://ai-concierge-mvp-prod.your-subdomain.workers.dev
+              - **Staging**: https://ai-concierge-mvp-staging.your-subdomain.workers.dev
+              
+              **Changes in this release:**
+              ${context.payload.head_commit?.message || 'Manual deployment'}
+              `,
+              draft: false,
+              prerelease: false
+            });
+            
+            console.log(`Created release: ${release.html_url}`);
+
+      - name: Create production deployment status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: context.payload.deployment?.id || 0,
+              state: 'success',
+              environment: 'production',
+              environment_url: 'https://ai-concierge-mvp-prod.your-subdomain.workers.dev',
+              description: 'Production deployment successful'
+            });
+
+  rollback:
+    name: Automatic Rollback
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-production]
+    if: failure() && needs.deploy-production.result == 'failure'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Wrangler
+        run: npm install -g wrangler
+
+      - name: Rollback production deployment
+        run: |
+          echo "Production deployment failed, initiating rollback..."
+          
+          # Get previous successful deployment
+          PREVIOUS_DEPLOYMENT=$(wrangler deployments list --name ai-concierge-mvp-prod --json | jq -r '.[1].id')
+          
+          if [[ -n "$PREVIOUS_DEPLOYMENT" && "$PREVIOUS_DEPLOYMENT" != "null" ]]; then
+            echo "Rolling back to deployment: $PREVIOUS_DEPLOYMENT"
+            wrangler rollback --name ai-concierge-mvp-prod --deployment-id "$PREVIOUS_DEPLOYMENT"
+          else
+            echo "No previous deployment found for rollback"
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Notify team of rollback
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Production Deployment Failed - Rollback Initiated',
+              body: `
+              ## Production Deployment Failure
+              
+              **Failed Release**: v${{ needs.prepare.outputs.version }}
+              **Commit**: ${context.sha}
+              **Workflow**: [View Details](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+              
+              **Actions Taken:**
+              - ✅ Automatic rollback initiated
+              - ⚠️ Production traffic restored to previous version
+              - 🔍 Investigation required
+              
+              **Next Steps:**
+              1. Review deployment logs
+              2. Identify root cause
+              3. Fix issues in new PR
+              4. Re-deploy when ready
+              
+              cc: @team
+              `,
+              labels: ['bug', 'production', 'urgent']
+            });
+
+  notify:
+    name: Notify Team
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-staging, deploy-production]
+    if: always()
+    steps:
+      - name: Determine notification message
+        id: notification
+        run: |
+          STAGING_STATUS="${{ needs.deploy-staging.result }}"
+          PRODUCTION_STATUS="${{ needs.deploy-production.result }}"
+          
+          if [[ "$PRODUCTION_STATUS" == "success" ]]; then
+            MESSAGE="🚀 Production deployment successful for v${{ needs.prepare.outputs.version }}"
+            STATUS="success"
+          elif [[ "$STAGING_STATUS" == "success" && "$PRODUCTION_STATUS" == "skipped" ]]; then
+            MESSAGE="🏗️ Staging deployment successful for v${{ needs.prepare.outputs.version }}"
+            STATUS="success"
+          else
+            MESSAGE="❌ Deployment failed for v${{ needs.prepare.outputs.version }}"
+            STATUS="failure"
+          fi
+          
+          echo "message=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "status=${STATUS}" >> $GITHUB_OUTPUT
+
+      - name: Post deployment status
+        run: |
+          echo "${{ steps.notification.outputs.message }}"
+          echo "Status: ${{ steps.notification.outputs.status }}"
+          # Add Slack/Teams/Discord notification here if needed

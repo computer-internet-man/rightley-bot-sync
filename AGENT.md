@@ -14,6 +14,11 @@ version: 2025-07-30
 
 \# RedwoodSDK Cloudflare Starter – Repository Guide
 
+\## Architecture Map
+```
+Browser → Worker(SSR/RSC) → D1(Drizzle) → Queues(CF) → Sentry/Logs
+```
+
 \*\*Overview:\*\* The \*RedwoodSDK Cloudflare Starter Template\* is a
 full-stack boilerplate optimized for Cloudflare’s edge network. It
 combines the RedwoodSDK framework with Cloudflare Workers, Durable
@@ -37,15 +42,15 @@ for handling requests at the edge.
 per-user session storage. (see @~/session/AGENT.md for session
 management details.)
 
-\- \*\*D1 Database + Prisma\*\* – Cloudflare D1 (SQLite) for persistent
-SQL storage, (see @~/prisma/AGENT.md for schema and query details)
-accessed via the Prisma type-safe ORM.
+\- \*\*D1 Database + Drizzle\*\* – Cloudflare D1 (SQLite) for persistent
+SQL storage, accessed via the Drizzle type-safe ORM with first-class D1 support.
 
 \- \*\*R2 Object Storage\*\* – S3-like storage on Cloudflare for files
 and media.
 
-\- \*\*WebAuthn Passkeys\*\* – Modern password-less authentication using
-device credentials.
+\- \*\*Cloudflare Access SSO\*\* – Zero Trust SSO authentication with JWT validation and RBAC middleware.
+
+\- \*\*Sentry Error Tracking\*\* – Production-grade error monitoring and performance tracking with user context and breadcrumbs.
 
 \- \*\*Vite Build Tool\*\* – Enables fast hot-reload during development
 and optimized ESM bundles for production.
@@ -55,6 +60,41 @@ consistency across machines.
 
 \- \*\*Wrangler CLI\*\* – Tool for building, previewing, and deploying
 the app to Cloudflare Workers.
+
+\## Standardized Commands
+
+### Core
+- dev: `CLOUDFLARE_ENV=local pnpm dev`
+- logs:tail: `wrangler tail`
+- sentry:check: `curl -sS http://localhost:5173/debug/sentry` (expect one intentional error)
+
+### Performance Monitoring (Step 14)
+- perf:headers: `curl -I 'http://localhost:5173/draft?debug=1'` (view Server-Timing headers)
+- perf:metrics: `curl -sS http://localhost:5173/monitoring/performance` (comprehensive metrics)
+- perf:debug: `curl -sS http://localhost:5173/debug/performance` (debug & test metrics)
+- perf:regression: `curl -w "@curl-format.txt" -sS http://localhost:5173/draft` (CI/CD timing)
+- perf:budget: `pnpm build` (check bundle size budgets, warn >500KB chunks)
+
+### DB (Drizzle)
+- db:generate: `pnpm dlx drizzle-kit generate`
+- db:migrate:dev: `wrangler d1 migrations apply concierge_dev --local --database ./drizzle/migrations`
+- db:seed: `node --loader tsx scripts/seed.ts`
+
+### Tests
+- test:unit: `pnpm vitest run`
+- test:watch: `pnpm vitest`
+- test:e2e: `pnpm e2e` (build → deploy preview → run Playwright)
+
+### Queues / Cron
+- queue:demo: `curl -sS http://localhost:5173/debug/enqueue` then `wrangler dev --test --queue`
+- queue:status: `curl -sS http://localhost:5173/debug/queue-status`
+- queue:test: `curl -sS http://localhost:5173/debug/enqueue-test`
+- queue:consumer: `wrangler dev --test --queue` (enable queue processing)
+- cron:run: `wrangler dev --test-scheduled`
+
+### Deploy
+- deploy:preview: GitHub Action (wrangler-action) on PR open/update
+- deploy:prod: GitHub Action on main; uploads source maps; gradual promote
 
 \## Documentation Topics
 

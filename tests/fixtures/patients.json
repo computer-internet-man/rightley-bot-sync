@@ -1,0 +1,30 @@
+[
+  {
+    "id": "patient-1",
+    "name": "John Test",
+    "age": 45,
+    "medicalHistory": "Diabetes, Hypertension",
+    "currentCondition": "Stable"
+  },
+  {
+    "id": "patient-2", 
+    "name": "Jane Test",
+    "age": 32,
+    "medicalHistory": "Asthma",
+    "currentCondition": "Controlled"
+  },
+  {
+    "id": "patient-3",
+    "name": "Bob Test",
+    "age": 67,
+    "medicalHistory": "Heart Disease, Arthritis",
+    "currentCondition": "Improving"
+  },
+  {
+    "id": "patient-4",
+    "name": "Alice Test", 
+    "age": 28,
+    "medicalHistory": "Anxiety, Allergies",
+    "currentCondition": "Stable"
+  }
+]

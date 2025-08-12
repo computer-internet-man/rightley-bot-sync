@@ -1,0 +1,19 @@
+# Global code owners
+* @your-team
+
+# CI/CD workflows - require DevOps approval
+/.github/workflows/ @devops-team @your-team
+
+# Deployment scripts - require DevOps approval  
+/scripts/deploy-*.sh @devops-team @your-team
+
+# Database migrations - require backend approval
+/drizzle/ @backend-team @your-team
+/prisma/ @backend-team @your-team
+
+# Security configurations - require security approval
+/security/ @security-team @your-team
+wrangler.jsonc @devops-team @security-team
+
+# Production configuration - require admin approval
+/.github/environments/production.yml @admin-team

@@ -1,0 +1,64 @@
+graph TB
+    subgraph "Client Layer"
+        Browser[Web Browser]
+        Mobile[Mobile App]
+    end
+
+    subgraph "Edge Network"
+        CF[Cloudflare Edge]
+        WAF[Web Application Firewall]
+        DDoS[DDoS Protection]
+        RateLimit[Rate Limiting]
+    end
+
+    subgraph "Worker Runtime"
+        Worker[Cloudflare Worker]
+        Auth[Authentication Layer]
+        Security[Security Gateway]
+        Router[Request Router]
+    end
+
+    subgraph "Data Layer"
+        D1[(D1 SQLite Database)]
+        KV[KV Storage]
+        R2[R2 Object Storage]
+    end
+
+    subgraph "Processing Layer"
+        Queue[Message Queue]
+        Jobs[Background Jobs]
+        Cron[Scheduled Tasks]
+    end
+
+    subgraph "External Services"
+        Sentry[Sentry Monitoring]
+        SendGrid[SendGrid Email]
+        Twilio[Twilio SMS]
+        OpenAI[OpenAI API]
+    end
+
+    Browser --> CF
+    Mobile --> CF
+    CF --> WAF
+    WAF --> DDoS
+    DDoS --> RateLimit
+    RateLimit --> Worker
+
+    Worker --> Auth
+    Auth --> Security
+    Security --> Router
+    
+    Router --> D1
+    Router --> KV
+    Router --> R2
+    Router --> Queue
+
+    Queue --> Jobs
+    Jobs --> SendGrid
+    Jobs --> Twilio
+    Jobs --> Sentry
+
+    Worker --> OpenAI
+    Worker --> Sentry
+    
+    Cron --> Worker

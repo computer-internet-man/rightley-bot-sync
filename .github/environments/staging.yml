@@ -1,0 +1,31 @@
+# GitHub Environment Configuration for Staging
+# This file documents the staging environment configuration
+# Actual environments are configured through GitHub UI or API
+
+name: staging
+url: https://ai-concierge-mvp-staging.your-subdomain.workers.dev
+
+# Environment Protection Rules (configured in GitHub UI)
+# - Required reviewers: none (automatic deployment)
+# - Branch protection: main branch only
+# - Deployment timeout: 10 minutes
+
+# Environment Variables (configured in GitHub UI)
+# CLOUDFLARE_API_TOKEN: <secret>
+# CLOUDFLARE_ACCOUNT_ID: <secret>
+# SENTRY_AUTH_TOKEN: <secret> (optional)
+# SENTRY_ORG: <string> (optional)
+# SENTRY_PROJECT: <string> (optional)
+
+# Environment Secrets
+# - All production secrets should be mirrored here with staging values
+# - Database credentials for staging D1 instance
+# - API keys for staging integrations
+# - Reduced quotas and limits for cost control
+
+description: |
+  Staging environment for AI Concierge MVP
+  - Automatically deployed from main branch
+  - Used for final testing before production
+  - Mirrors production configuration with staging data
+  - No approval required for deployment

@@ -1,0 +1,407 @@
+name: CI - PR Testing & Preview Deployment
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+concurrency:
+  group: pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+
+jobs:
+  setup:
+    name: Setup & Dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache-keys.outputs.cache-key }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Generate cache keys
+        id: cache-keys
+        run: |
+          echo "cache-key=${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Drizzle migrations
+        run: pnpm dlx drizzle-kit generate
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .pnpm-store
+            drizzle/migrations
+          key: ${{ steps.cache-keys.outputs.cache-key }}
+
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .pnpm-store
+            drizzle/migrations
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm types
+
+      - name: Generate Prisma client
+        run: pnpm generate
+
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .pnpm-store
+            drizzle/migrations
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup test database
+        run: |
+          # Create local test DB
+          echo "DATABASE_URL=file:./test.db" > .env.test
+          
+      - name: Apply database migrations
+        run: pnpm dlx drizzle-kit push:sqlite --config=drizzle.config.ts
+        env:
+          DATABASE_URL: file:./test.db
+
+      - name: Run unit tests
+        run: pnpm test:unit --coverage --reporter=verbose
+        env:
+          CI: true
+
+      - name: Run integration tests
+        run: pnpm test:integration --coverage --reporter=verbose
+        env:
+          CI: true
+
+      - name: Upload test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: coverage/
+          retention-days: 7
+
+  deploy-preview:
+    name: Deploy Preview Environment
+    runs-on: ubuntu-latest
+    needs: [setup, lint-and-typecheck, unit-tests]
+    outputs:
+      preview-url: ${{ steps.deploy.outputs.deployment-url }}
+      preview-id: ${{ steps.deploy.outputs.deployment-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .pnpm-store
+            drizzle/migrations
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm generate
+
+      - name: Build application
+        run: pnpm build
+        env:
+          RWSDK_DEPLOY: 1
+
+      - name: Create preview environment name
+        id: preview-env
+        run: |
+          PR_NUMBER="${{ github.event.number }}"
+          BRANCH_NAME="${{ github.head_ref }}"
+          SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          ENV_NAME="pr-${PR_NUMBER}-${SAFE_BRANCH}"
+          echo "env-name=${ENV_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Cloudflare Workers (Preview)
+        uses: cloudflare/wrangler-action@v3
+        id: deploy
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --name ai-concierge-mvp-${{ steps.preview-env.outputs.env-name }} --env dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Setup preview database
+        run: |
+          # Create preview-specific D1 database
+          wrangler d1 create ai-concierge-preview-${{ steps.preview-env.outputs.env-name }} || true
+          
+          # Apply migrations to preview database
+          wrangler d1 migrations apply ai-concierge-preview-${{ steps.preview-env.outputs.env-name }} --remote || true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-preview]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      - name: Wait for deployment to be ready
+        run: |
+          echo "Waiting for deployment to be ready..."
+          URL="${{ needs.deploy-preview.outputs.preview-url }}"
+          for i in {1..30}; do
+            if curl -f -s "$URL/health" > /dev/null; then
+              echo "Deployment is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Deployment not ready yet, waiting 10 seconds..."
+            sleep 10
+          done
+
+      - name: Run Playwright tests
+        run: pnpm e2e
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ needs.deploy-preview.outputs.preview-url }}
+          CI: true
+
+      - name: Upload Playwright artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run security audit
+        run: pnpm audit --audit-level moderate
+
+      - name: Check for known vulnerabilities
+        run: |
+          # Check package.json for known vulnerable packages
+          echo "Checking for vulnerable dependencies..."
+          pnpm audit --audit-level high --json > audit.json || true
+          
+          if [ -s audit.json ]; then
+            echo "Security vulnerabilities found!"
+            cat audit.json
+            exit 1
+          else
+            echo "No high-severity vulnerabilities found."
+          fi
+
+  comment-pr:
+    name: Comment on PR
+    runs-on: ubuntu-latest
+    needs: [deploy-preview, e2e-tests, unit-tests]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Create PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('🚀 Preview Deployment')
+            );
+
+            const previewUrl = "${{ needs.deploy-preview.outputs.preview-url }}";
+            const unitTestsStatus = "${{ needs.unit-tests.result }}";
+            const e2eTestsStatus = "${{ needs.e2e-tests.result }}";
+            
+            const statusEmoji = {
+              success: "✅",
+              failure: "❌", 
+              cancelled: "⚠️",
+              skipped: "⚪"
+            };
+
+            const commentBody = `
+            ## 🚀 Preview Deployment
+
+            | Environment | Status | URL |
+            |-------------|---------|-----|
+            | Preview | ${statusEmoji[e2eTestsStatus] || "⚪"} | ${previewUrl ? `[Visit Preview](${previewUrl})` : "Deployment failed"} |
+
+            ## 🧪 Test Results
+
+            | Test Suite | Status | Details |
+            |------------|---------|---------|
+            | Unit Tests | ${statusEmoji[unitTestsStatus] || "⚪"} | [View Results](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |
+            | E2E Tests | ${statusEmoji[e2eTestsStatus] || "⚪"} | [View Results](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |
+
+            ---
+            
+            <details>
+            <summary>📋 Deployment Information</summary>
+            
+            - **PR**: #${{ github.event.number }}
+            - **Branch**: \`${{ github.head_ref }}\`
+            - **Commit**: \`${{ github.sha }}\`
+            - **Workflow**: [View Details](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            
+            </details>
+
+            _Updated: ${new Date().toISOString()}_
+            `;
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: commentBody
+              });
+            }
+
+  cleanup:
+    name: Cleanup Preview Resources
+    runs-on: ubuntu-latest
+    needs: [deploy-preview, e2e-tests]
+    if: always()
+    steps:
+      - name: Cleanup preview deployment
+        run: |
+          echo "Preview deployment cleanup will be handled by separate workflow"
+          echo "Preview URL: ${{ needs.deploy-preview.outputs.preview-url }}"
+          # Note: Actual cleanup handled by cleanup.yml workflow

@@ -3,7 +3,8 @@
  * These functions handle form submissions and database operations
  */
 
-import { db, type User } from "@/db";
+import { drizzleDb, users, patientBriefs, type User } from "@/db";
+import { eq, like, or, and, gte, lte, desc } from "drizzle-orm";
 import { canEditPatientBriefs } from "@/lib/server-functions";
 import { z } from "zod";
 
@@ -47,15 +48,43 @@ export async function createPatientBrief(user: User, data: {
 
     const validatedData = PatientBriefSchema.parse(data);
 
-    const brief = await db.patientBrief.create({
-      data: {
+    const [brief] = await drizzleDb
+      .insert(patientBriefs)
+      .values({
         ...validatedData,
         doctorId: user.id,
-      },
-      include: { doctor: true },
-    });
+      })
+      .returning();
 
-    return { success: true, brief };
+    // Get brief with doctor information
+    const briefWithDoctor = await drizzleDb
+      .select({
+        id: patientBriefs.id,
+        patientName: patientBriefs.patientName,
+        briefText: patientBriefs.briefText,
+        medicalHistory: patientBriefs.medicalHistory,
+        currentMedications: patientBriefs.currentMedications,
+        allergies: patientBriefs.allergies,
+        doctorNotes: patientBriefs.doctorNotes,
+        patientInquiry: patientBriefs.patientInquiry,
+        createdAt: patientBriefs.createdAt,
+        updatedAt: patientBriefs.updatedAt,
+        doctorId: patientBriefs.doctorId,
+        doctor: {
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          role: users.role,
+          createdAt: users.createdAt,
+        }
+      })
+      .from(patientBriefs)
+      .leftJoin(users, eq(patientBriefs.doctorId, users.id))
+      .where(eq(patientBriefs.id, brief.id));
+
+    const briefResult = briefWithDoctor[0];
+
+    return { success: true, brief: briefResult };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { error: error.errors[0].message };
@@ -90,20 +119,52 @@ export async function updatePatientBrief(user: User, briefId: string, data: {
 
     // If user is a doctor, ensure they can only update their own briefs
     if (user.role === "doctor") {
-      const brief = await db.patientBrief.findUnique({
-        where: { id: briefId },
-      });
+      const [brief] = await drizzleDb
+        .select()
+        .from(patientBriefs)
+        .where(eq(patientBriefs.id, briefId))
+        .limit(1);
       
       if (!brief || brief.doctorId !== user.id) {
         return { error: "Cannot update patient brief - not assigned to you" };
       }
     }
 
-    const updatedBrief = await db.patientBrief.update({
-      where: { id: briefId },
-      data: validatedData,
-      include: { doctor: true },
-    });
+    await drizzleDb
+      .update(patientBriefs)
+      .set({
+        ...validatedData,
+        updatedAt: new Date(),
+      })
+      .where(eq(patientBriefs.id, briefId));
+
+    // Get updated brief with doctor information
+    const updatedBriefWithDoctor = await drizzleDb
+      .select({
+        id: patientBriefs.id,
+        patientName: patientBriefs.patientName,
+        briefText: patientBriefs.briefText,
+        medicalHistory: patientBriefs.medicalHistory,
+        currentMedications: patientBriefs.currentMedications,
+        allergies: patientBriefs.allergies,
+        doctorNotes: patientBriefs.doctorNotes,
+        patientInquiry: patientBriefs.patientInquiry,
+        createdAt: patientBriefs.createdAt,
+        updatedAt: patientBriefs.updatedAt,
+        doctorId: patientBriefs.doctorId,
+        doctor: {
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          role: users.role,
+          createdAt: users.createdAt,
+        }
+      })
+      .from(patientBriefs)
+      .leftJoin(users, eq(patientBriefs.doctorId, users.id))
+      .where(eq(patientBriefs.id, briefId));
+
+    const updatedBrief = updatedBriefWithDoctor[0];
 
     // Release lock after successful update
     briefLocks.delete(briefId);
@@ -124,9 +185,9 @@ export async function deletePatientBrief(user: User, briefId: string) {
       return { error: "Only administrators can delete patient briefs" };
     }
 
-    await db.patientBrief.delete({
-      where: { id: briefId },
-    });
+    await drizzleDb
+      .delete(patientBriefs)
+      .where(eq(patientBriefs.id, briefId));
 
     // Remove any locks
     briefLocks.delete(briefId);
@@ -206,44 +267,63 @@ export async function searchPatientBriefs(user: User, query: string, filters: {
   endDate?: string;
 }) {
   try {
-    const where: any = {};
+    let whereConditions: any[] = [];
 
     // Role-based access control
     if (user.role === "doctor") {
-      where.doctorId = user.id;
+      whereConditions.push(eq(patientBriefs.doctorId, user.id));
     }
 
     // Search query
     if (query) {
-      where.OR = [
-        { patientName: { contains: query, mode: "insensitive" } },
-        { briefText: { contains: query, mode: "insensitive" } },
-        { currentMedications: { contains: query, mode: "insensitive" } },
-        { allergies: { contains: query, mode: "insensitive" } },
+      const searchConditions = [
+        like(patientBriefs.patientName, `%${query}%`),
+        like(patientBriefs.briefText, `%${query}%`),
+        like(patientBriefs.currentMedications, `%${query}%`),
+        like(patientBriefs.allergies, `%${query}%`),
       ];
+      whereConditions.push(or(...searchConditions));
     }
 
     // Filters
     if (filters.doctorId && user.role === "admin") {
-      where.doctorId = filters.doctorId;
+      whereConditions.push(eq(patientBriefs.doctorId, filters.doctorId));
     }
 
-    if (filters.startDate || filters.endDate) {
-      where.updatedAt = {};
-      if (filters.startDate) {
-        where.updatedAt.gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        where.updatedAt.lte = new Date(filters.endDate);
-      }
+    if (filters.startDate) {
+      whereConditions.push(gte(patientBriefs.updatedAt, new Date(filters.startDate)));
     }
 
-    const briefs = await db.patientBrief.findMany({
-      where,
-      include: { doctor: true },
-      orderBy: { updatedAt: "desc" },
-      take: 50, // Limit results
-    });
+    if (filters.endDate) {
+      whereConditions.push(lte(patientBriefs.updatedAt, new Date(filters.endDate)));
+    }
+
+    const briefs = await drizzleDb
+      .select({
+        id: patientBriefs.id,
+        patientName: patientBriefs.patientName,
+        briefText: patientBriefs.briefText,
+        medicalHistory: patientBriefs.medicalHistory,
+        currentMedications: patientBriefs.currentMedications,
+        allergies: patientBriefs.allergies,
+        doctorNotes: patientBriefs.doctorNotes,
+        patientInquiry: patientBriefs.patientInquiry,
+        createdAt: patientBriefs.createdAt,
+        updatedAt: patientBriefs.updatedAt,
+        doctorId: patientBriefs.doctorId,
+        doctor: {
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          role: users.role,
+          createdAt: users.createdAt,
+        }
+      })
+      .from(patientBriefs)
+      .leftJoin(users, eq(patientBriefs.doctorId, users.id))
+      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .orderBy(desc(patientBriefs.updatedAt))
+      .limit(50); // Limit results
 
     return { success: true, briefs };
   } catch (error) {
@@ -254,15 +334,15 @@ export async function searchPatientBriefs(user: User, query: string, filters: {
 
 export async function getAvailableDoctors() {
   try {
-    const doctors = await db.user.findMany({
-      where: { role: "doctor" },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-      },
-      orderBy: { email: "asc" },
-    });
+    const doctors = await drizzleDb
+      .select({
+        id: users.id,
+        email: users.email,
+        username: users.username,
+      })
+      .from(users)
+      .where(eq(users.role, "doctor"))
+      .orderBy(users.email);
 
     return { success: true, doctors };
   } catch (error) {

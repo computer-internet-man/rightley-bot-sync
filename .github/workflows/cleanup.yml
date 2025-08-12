@@ -1,0 +1,307 @@
+name: Cleanup - Preview Deployments
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    # Run cleanup daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      force_cleanup:
+        description: 'Force cleanup of all preview deployments'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+
+jobs:
+  cleanup-pr-deployments:
+    name: Cleanup PR Preview Deployments
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Wrangler
+        run: npm install -g wrangler
+
+      - name: Generate preview environment name
+        id: preview-env
+        run: |
+          PR_NUMBER="${{ github.event.number }}"
+          BRANCH_NAME="${{ github.head_ref }}"
+          SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          ENV_NAME="pr-${PR_NUMBER}-${SAFE_BRANCH}"
+          WORKER_NAME="ai-concierge-mvp-${ENV_NAME}"
+          DB_NAME="ai-concierge-preview-${ENV_NAME}"
+          
+          echo "env-name=${ENV_NAME}" >> $GITHUB_OUTPUT
+          echo "worker-name=${WORKER_NAME}" >> $GITHUB_OUTPUT
+          echo "db-name=${DB_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Delete preview Worker deployment
+        run: |
+          echo "Attempting to delete Worker: ${{ steps.preview-env.outputs.worker-name }}"
+          wrangler delete --name "${{ steps.preview-env.outputs.worker-name }}" --force || {
+            echo "Worker deletion failed or worker doesn't exist"
+            exit 0
+          }
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Delete preview D1 database
+        run: |
+          echo "Attempting to delete D1 database: ${{ steps.preview-env.outputs.db-name }}"
+          wrangler d1 delete "${{ steps.preview-env.outputs.db-name }}" --force || {
+            echo "D1 database deletion failed or database doesn't exist"
+            exit 0
+          }
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Cleanup preview queues
+        run: |
+          echo "Cleaning up preview-specific queues if any..."
+          # Preview environments typically share queues, so no cleanup needed
+          echo "No preview-specific queues to clean up"
+
+      - name: Update PR with cleanup status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('🚀 Preview Deployment')
+            );
+
+            if (botComment) {
+              const updatedBody = botComment.body + '\n\n---\n\n🧹 **Preview environment cleaned up**\n- ✅ Worker deployment deleted\n- ✅ Database deleted\n- ✅ Resources freed\n\n_Cleanup completed at ' + new Date().toISOString() + '_';
+              
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: updatedBody
+              });
+            }
+
+  cleanup-stale-deployments:
+    name: Cleanup Stale Preview Deployments
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_cleanup == 'true')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Wrangler
+        run: npm install -g wrangler
+
+      - name: List and cleanup stale Workers
+        run: |
+          echo "Listing all Workers..."
+          
+          # Get all Workers with our preview naming pattern
+          WORKERS=$(wrangler list --json | jq -r '.[] | select(.name | startswith("ai-concierge-mvp-pr-")) | .name')
+          
+          if [[ -z "$WORKERS" ]]; then
+            echo "No preview Workers found"
+            exit 0
+          fi
+          
+          echo "Found preview Workers:"
+          echo "$WORKERS"
+          
+          # Get list of open PRs
+          echo "Fetching open PRs..."
+          OPEN_PRS=$(gh pr list --state open --json number --jq '.[].number')
+          
+          echo "Open PRs: $OPEN_PRS"
+          
+          # Check each Worker against open PRs
+          while IFS= read -r worker; do
+            if [[ -n "$worker" ]]; then
+              # Extract PR number from worker name (format: ai-concierge-mvp-pr-123-branch-name)
+              PR_NUM=$(echo "$worker" | sed -n 's/ai-concierge-mvp-pr-\([0-9]\+\).*/\1/p')
+              
+              if [[ -n "$PR_NUM" ]]; then
+                if echo "$OPEN_PRS" | grep -q "^$PR_NUM$"; then
+                  echo "PR #$PR_NUM is still open, keeping Worker: $worker"
+                else
+                  echo "PR #$PR_NUM is closed, deleting Worker: $worker"
+                  wrangler delete --name "$worker" --force || echo "Failed to delete $worker"
+                fi
+              else
+                echo "Could not extract PR number from worker name: $worker"
+              fi
+            fi
+          done <<< "$WORKERS"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List and cleanup stale D1 databases
+        run: |
+          echo "Listing all D1 databases..."
+          
+          # Get all D1 databases with our preview naming pattern
+          DATABASES=$(wrangler d1 list --json | jq -r '.[] | select(.name | startswith("ai-concierge-preview-pr-")) | .name')
+          
+          if [[ -z "$DATABASES" ]]; then
+            echo "No preview databases found"
+            exit 0
+          fi
+          
+          echo "Found preview databases:"
+          echo "$DATABASES"
+          
+          # Get list of open PRs
+          OPEN_PRS=$(gh pr list --state open --json number --jq '.[].number')
+          
+          # Check each database against open PRs
+          while IFS= read -r database; do
+            if [[ -n "$database" ]]; then
+              # Extract PR number from database name (format: ai-concierge-preview-pr-123-branch-name)
+              PR_NUM=$(echo "$database" | sed -n 's/ai-concierge-preview-pr-\([0-9]\+\).*/\1/p')
+              
+              if [[ -n "$PR_NUM" ]]; then
+                if echo "$OPEN_PRS" | grep -q "^$PR_NUM$"; then
+                  echo "PR #$PR_NUM is still open, keeping database: $database"
+                else
+                  echo "PR #$PR_NUM is closed, deleting database: $database"
+                  wrangler d1 delete "$database" --force || echo "Failed to delete $database"
+                fi
+              else
+                echo "Could not extract PR number from database name: $database"
+              fi
+            fi
+          done <<< "$DATABASES"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate cleanup report
+        run: |
+          echo "## 🧹 Cleanup Report - $(date)" >> cleanup-report.md
+          echo "" >> cleanup-report.md
+          echo "### Summary" >> cleanup-report.md
+          echo "- Scheduled cleanup completed" >> cleanup-report.md
+          echo "- Removed stale preview deployments for closed PRs" >> cleanup-report.md
+          echo "- Freed up Cloudflare resources" >> cleanup-report.md
+          echo "" >> cleanup-report.md
+          echo "### Next Cleanup" >> cleanup-report.md
+          echo "Scheduled for: $(date -d '+1 day' '+%Y-%m-%d %H:%M UTC')" >> cleanup-report.md
+          
+          cat cleanup-report.md
+
+      - name: Upload cleanup report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-report-${{ github.run_number }}
+          path: cleanup-report.md
+          retention-days: 30
+
+  cleanup-old-artifacts:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Cleanup old workflow artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            let deletedCount = 0;
+            
+            for (const artifact of artifacts.data.artifacts) {
+              const createdAt = new Date(artifact.created_at);
+              
+              if (createdAt < thirtyDaysAgo) {
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: artifact.id
+                  });
+                  
+                  console.log(`Deleted artifact: ${artifact.name} (${artifact.created_at})`);
+                  deletedCount++;
+                } catch (error) {
+                  console.log(`Failed to delete artifact ${artifact.name}: ${error.message}`);
+                }
+              }
+            }
+            
+            console.log(`Cleanup completed. Deleted ${deletedCount} old artifacts.`);
+
+  cleanup-old-deployments:
+    name: Cleanup Old Deployment Records
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Cleanup old GitHub deployments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployments = await github.rest.repos.listDeployments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+              environment: 'preview'
+            });
+
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            let deletedCount = 0;
+
+            for (const deployment of deployments.data) {
+              const createdAt = new Date(deployment.created_at);
+              
+              if (createdAt < thirtyDaysAgo) {
+                try {
+                  // Set deployment to inactive first
+                  await github.rest.repos.createDeploymentStatus({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    deployment_id: deployment.id,
+                    state: 'inactive'
+                  });
+                  
+                  console.log(`Marked deployment ${deployment.id} as inactive`);
+                  deletedCount++;
+                } catch (error) {
+                  console.log(`Failed to cleanup deployment ${deployment.id}: ${error.message}`);
+                }
+              }
+            }
+            
+            console.log(`Cleanup completed. Processed ${deletedCount} old deployments.`);
