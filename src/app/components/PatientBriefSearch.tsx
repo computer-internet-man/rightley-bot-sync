@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { searchPatientBriefs, getAvailableDoctors } from "@/lib/patientBriefActions";
+import { getAvailableDoctors } from "@/lib/patientBriefActions";
 import { type User } from "@/db";
 
 interface PatientBriefSearchProps {
@@ -33,13 +33,26 @@ export function PatientBriefSearch({ user, onResults, onError }: PatientBriefSea
   const handleSearch = async () => {
     setLoading(true);
     try {
-      const result = await searchPatientBriefs(user, query, filters);
+      const response = await fetch("/api/search-patient-briefs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query,
+          filters
+        }),
+      });
+
+      const result = await response.json();
+      
       if (result.success) {
-        onResults(result.briefs);
+        onResults(result.briefs || []);
       } else {
         onError(result.error || "Search failed");
       }
     } catch (err) {
+      console.error("Search error:", err);
       onError("An unexpected error occurred during search");
     } finally {
       setLoading(false);
@@ -64,7 +77,7 @@ export function PatientBriefSearch({ user, onResults, onError }: PatientBriefSea
   useEffect(() => {
     // Auto-search when query or filters change (with debounce)
     const timeoutId = setTimeout(() => {
-      if (query || Object.values(filters).some(f => f)) {
+      if (query.trim() || Object.values(filters).some(f => f && f.trim())) {
         handleSearch();
       }
     }, 500);

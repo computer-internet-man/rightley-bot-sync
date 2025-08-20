@@ -22,12 +22,16 @@ export function PatientBriefsPageClient({ user, initialBriefs }: PatientBriefsPa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Track if user has performed a search
+  const [hasSearched, setHasSearched] = useState(false);
+
   useEffect(() => {
-    // If no search results, show all briefs
-    if (filteredBriefs.length === 0 && briefs.length > 0) {
+    // Only show briefs after user has performed a search
+    // Don't auto-populate on initial load
+    if (hasSearched && filteredBriefs.length === 0 && briefs.length > 0) {
       setFilteredBriefs(briefs);
     }
-  }, [briefs, filteredBriefs.length]);
+  }, [briefs, filteredBriefs.length, hasSearched]);
 
   const handleFormSubmit = (brief: any) => {
     if (editingBrief) {
@@ -70,10 +74,12 @@ export function PatientBriefsPageClient({ user, initialBriefs }: PatientBriefsPa
   };
 
   const handleSearchResults = (results: any[]) => {
+    setHasSearched(true);
     setFilteredBriefs(results);
   };
 
   const handleSearchError = (errorMessage: string) => {
+    setHasSearched(true);
     setError(errorMessage);
   };
 
@@ -82,7 +88,7 @@ export function PatientBriefsPageClient({ user, initialBriefs }: PatientBriefsPa
     setEditingBrief(null);
   };
 
-  const displayBriefs = filteredBriefs.length > 0 ? filteredBriefs : briefs;
+  const displayBriefs = hasSearched ? (filteredBriefs.length > 0 ? filteredBriefs : []) : [];
 
   return (
     <div className="space-y-6">
@@ -142,10 +148,12 @@ export function PatientBriefsPageClient({ user, initialBriefs }: PatientBriefsPa
       {/* Results Summary */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-700">
-          {filteredBriefs.length > 0 && filteredBriefs.length !== briefs.length ? (
-            <>Showing {filteredBriefs.length} of {briefs.length} briefs</>
+          {!hasSearched ? (
+            <span className="text-gray-500 italic">Enter a patient name to search for briefs</span>
+          ) : filteredBriefs.length > 0 ? (
+            <>Showing {filteredBriefs.length} search result{filteredBriefs.length !== 1 ? 's' : ''}</>
           ) : (
-            <>Showing {briefs.length} brief{briefs.length !== 1 ? 's' : ''}</>
+            <span className="text-gray-500">No briefs found for your search</span>
           )}
         </div>
         

@@ -178,8 +178,8 @@ export function PatientBriefList({
                 </div>
 
                 <div className="col-span-2">
-                  <p className="text-sm font-medium text-gray-900">{brief.doctor.email}</p>
-                  <p className="text-sm text-gray-500">{brief.doctor.username}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{brief.doctor.email}</p>
+                  <p className="text-sm text-gray-500 truncate">{brief.doctor.username}</p>
                 </div>
 
                 <div className="col-span-2">

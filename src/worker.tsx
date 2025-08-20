@@ -2277,6 +2277,111 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
     });
   }),
 
+  // Patient brief search API
+  route("/api/search-patient-briefs", async ({ request, ctx }) => {
+    console.log("[API] Search patient briefs called");
+    
+    if (request.method !== 'POST') {
+      return new Response(JSON.stringify({ success: false, error: 'Method not allowed' }), { 
+        status: 405,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!ctx.user) {
+      return new Response(JSON.stringify({ success: false, error: 'Authentication required' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    try {
+      const { query, filters } = await request.json();
+      
+      // Perform search directly here
+      const { drizzleDb, users, patientBriefs } = await import('@/db');
+      const { eq, like, or, and, gte, lte, desc } = await import('drizzle-orm');
+      
+      // If no query or filters, return empty results to avoid full table scan
+      if (!query?.trim() && !Object.values(filters || {}).some(f => f && f.trim())) {
+        return new Response(JSON.stringify({ success: true, briefs: [] }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      let whereConditions: any[] = [];
+
+      // Role-based access control
+      if (ctx.user.role === "doctor") {
+        whereConditions.push(eq(patientBriefs.doctorId, ctx.user.id));
+      }
+
+      // Search query
+      if (query?.trim()) {
+        const searchConditions = [
+          like(patientBriefs.patientName, `%${query}%`),
+          like(patientBriefs.briefText, `%${query}%`),
+          like(patientBriefs.currentMedications, `%${query}%`),
+          like(patientBriefs.allergies, `%${query}%`),
+        ];
+        whereConditions.push(or(...searchConditions));
+      }
+
+      // Filters
+      if (filters?.doctorId && ctx.user.role === "admin") {
+        whereConditions.push(eq(patientBriefs.doctorId, filters.doctorId));
+      }
+
+      if (filters?.startDate) {
+        whereConditions.push(gte(patientBriefs.updatedAt, new Date(filters.startDate)));
+      }
+
+      if (filters?.endDate) {
+        whereConditions.push(lte(patientBriefs.updatedAt, new Date(filters.endDate)));
+      }
+
+      const briefs = await drizzleDb
+        .select({
+          id: patientBriefs.id,
+          patientName: patientBriefs.patientName,
+          briefText: patientBriefs.briefText,
+          medicalHistory: patientBriefs.medicalHistory,
+          currentMedications: patientBriefs.currentMedications,
+          allergies: patientBriefs.allergies,
+          doctorNotes: patientBriefs.doctorNotes,
+          patientInquiry: patientBriefs.patientInquiry,
+          createdAt: patientBriefs.createdAt,
+          updatedAt: patientBriefs.updatedAt,
+          doctorId: patientBriefs.doctorId,
+          doctor: {
+            id: users.id,
+            username: users.username,
+            email: users.email,
+            role: users.role,
+            createdAt: users.createdAt,
+          }
+        })
+        .from(patientBriefs)
+        .leftJoin(users, eq(patientBriefs.doctorId, users.id))
+        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+        .orderBy(desc(patientBriefs.updatedAt))
+        .limit(50); // Limit results
+
+      return new Response(JSON.stringify({ success: true, briefs }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error("[API] Search error:", error);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Failed to search patient briefs' 
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }),
+
   // Queue management API
   route("/api/enqueue-job", async ({ request, ctx }) => {
     console.log("[API] Enqueue job called");

@@ -267,6 +267,11 @@ export async function searchPatientBriefs(user: User, query: string, filters: {
   endDate?: string;
 }) {
   try {
+    // If no query or filters, return empty results to avoid full table scan
+    if (!query.trim() && !Object.values(filters).some(f => f && f.trim())) {
+      return { success: true, briefs: [] };
+    }
+
     let whereConditions: any[] = [];
 
     // Role-based access control

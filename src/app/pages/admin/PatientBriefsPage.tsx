@@ -15,8 +15,8 @@ export default async function PatientBriefsPage({ ctx }: PatientBriefsPageProps)
     return <div>Access denied</div>;
   }
 
-  // Fetch patient briefs based on user role
-  const patientBriefs = await getPatientBriefs(user);
+  // Don't load patient briefs by default - user must search first
+  const patientBriefs: any[] = [];
 
   return (
     <div className="min-h-screen bg-gray-50">
