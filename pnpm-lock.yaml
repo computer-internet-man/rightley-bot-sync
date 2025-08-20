@@ -35,6 +35,9 @@ importers:
       rwsdk:
         specifier: 0.0.88
         version: 0.0.88(rollup@4.42.0)(typescript@5.9.2)(vite@6.3.5(@types/node@24.2.0)(jiti@2.4.2)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.1))(webpack@5.99.9(esbuild@0.25.5))(workerd@1.20250803.0)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.61
@@ -4184,9 +4187,6 @@ packages:
 
   zod@3.23.8:
     resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
-
-  zod@3.25.57:
-    resolution: {integrity: sha512-6tgzLuwVST5oLUxXTmBqoinKMd3JeesgbgseXeFasKKj8Q1FCZrHnbqJOyiEvr4cVAlbug+CgIsmJ8cl/pU5FA==}
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
@@ -8867,7 +8867,7 @@ snapshots:
       commander: 11.1.0
       fs-extra: 11.3.0
       import-meta-resolve: 4.1.0
-      zod: 3.25.57
+      zod: 3.25.76
 
   vibe-rules@0.3.85(@ai-sdk/openai-compatible@0.2.16(zod@3.25.76))(@ai-sdk/openai@1.3.23(zod@3.25.76))(@aws-sdk/client-dynamodb@3.862.0)(@aws-sdk/client-ec2@3.862.0)(@aws-sdk/client-iam@3.862.0)(@aws-sdk/client-lambda@3.862.0)(@aws-sdk/client-s3@3.862.0)(@aws-sdk/client-sagemaker@3.862.0)(@aws-sdk/client-ses@3.862.0)(@aws-sdk/client-sesv2@3.862.0)(@aws-sdk/client-sqs@3.862.0)(@aws-sdk/client-ssm@3.862.0)(@aws-sdk/client-sts@3.862.0)(@libsql/client@0.15.10)(@octokit/rest@21.1.1)(ai@4.3.19(react@19.2.0-canary-39cad7af-20250411)(zod@3.25.76))(arktype@2.1.20)(cloudflare@4.5.0)(drizzle-orm@0.44.4(@cloudflare/workers-types@4.20250807.0)(@libsql/client@0.15.10)(@opentelemetry/api@1.9.0)(@prisma/client@6.13.0(prisma@6.13.0(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(better-sqlite3@12.2.0)(prisma@6.13.0(magicast@0.3.5)(typescript@5.9.2)))(hono@4.8.12)(prettier@3.6.2)(stripe@17.7.0)(workerd@1.20250803.0):
     dependencies:
@@ -9187,7 +9187,5 @@ snapshots:
   zod@3.22.3: {}
 
   zod@3.23.8: {}
-
-  zod@3.25.57: {}
 
   zod@3.25.76: {}

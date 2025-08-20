@@ -1,0 +1,19 @@
+{
+  "object": "event",
+  "type": "contact.created",
+  "data": {
+    "object": {
+      "object": "contact",
+      "id": "entity_28V8BV463XXXX",
+      "displayName": "Patient Contact",
+      "phoneNumbers": [
+        {
+          "label": "mobile",
+          "value": "+15555555555",
+          "displayValue": "(555) 555-5555"
+        }
+      ],
+      "created": "2025-08-13T16:30:00Z"
+    }
+  }
+}

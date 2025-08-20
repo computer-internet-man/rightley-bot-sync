@@ -9,10 +9,12 @@ import DraftWorkflowPage from "@/app/pages/DraftWorkflowPage";
 import DoctorSettingsPage from "@/app/pages/doctor/SettingsPage";
 import PatientBriefsPage from "@/app/pages/admin/PatientBriefsPage";
 import AuditLogPage from "@/app/pages/admin/AuditLogPage";
+
 import { setCommonHeaders } from "@/app/headers";
 import { setEnhancedSecurityHeaders } from "@/middleware/securityHeaders";
 import { createSecurityGateway } from "@/middleware/securityGateway";
 import { userRoutes } from "@/app/pages/user/routes";
+import { pageRoutes as syncPageRoutes, apiRoutes as syncApiRoutes } from "@/app/pages/sync/routes";
 import { validateCloudflareAccessJWT, findOrCreateUser } from "@/lib/auth";
 import { requireAuth, requireAdmin, requireDoctor, requireStaff, requireAuditor } from "@/middleware/requireRole";
 import { type User, setupDb, drizzleDb } from "@/db";
@@ -237,6 +239,9 @@ export default defineApp([
       }
     }
   },
+  
+  // Health probe for dev server readiness
+  route('/__ping', () => new Response('pong')),
   
   // Test route for debugging
   route("/test", ({ ctx }) => {
@@ -2420,6 +2425,9 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
     }
   }),
   
+  // Sync API routes (these don't need Document wrapper)
+  prefix("/sync", syncApiRoutes),
+  
   // Document-wrapped routes - these handle HTML rendering
   render(Document, [
     // Public routes
@@ -2433,6 +2441,7 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
             <a href="/draft" style={{ marginRight: "1rem", padding: "0.5rem 1rem", background: "#3b82f6", color: "white", textDecoration: "none", borderRadius: "0.25rem" }}>Draft Workflow</a>
             <a href="/admin/briefs" style={{ marginRight: "1rem", padding: "0.5rem 1rem", background: "#10b981", color: "white", textDecoration: "none", borderRadius: "0.25rem" }}>Patient Briefs</a>
             <a href="/admin/audit" style={{ marginRight: "1rem", padding: "0.5rem 1rem", background: "#f59e0b", color: "white", textDecoration: "none", borderRadius: "0.25rem" }}>Audit Logs</a>
+            <a href="/sync" style={{ marginRight: "1rem", padding: "0.5rem 1rem", background: "#8b5cf6", color: "white", textDecoration: "none", borderRadius: "0.25rem" }}>Sync Integrations</a>
           </nav>
           <p>John Doe patient data should be accessible from the Patient Briefs and Draft Workflow pages.</p>
         </div>
@@ -2457,6 +2466,8 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
     route("/admin/briefs", PatientBriefsPage),
     
     route("/admin/audit", AuditLogPage),
+    
+    prefix("/sync", syncPageRoutes),
 
     // Legacy routes for compatibility
     route("/protected", ({ ctx }) => {

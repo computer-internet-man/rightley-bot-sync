@@ -166,6 +166,14 @@ export function createRateLimitMiddleware(env: any) {
                       request.headers.get('X-Forwarded-For') || 
                       'unknown';
 
+      // Skip rate limiting for localhost/development IPs
+      if (clientIP === 'unknown' || clientIP === '127.0.0.1' || clientIP === '::1' || 
+          clientIP.startsWith('192.168.') || clientIP.startsWith('10.') || 
+          clientIP.startsWith('172.16.') || clientIP.includes('localhost')) {
+        perf.endTimer(timer);
+        return null; // Allow request to proceed
+      }
+
       // Admin users bypass rate limiting
       if (user?.role === 'admin') {
         perf.endTimer(timer);

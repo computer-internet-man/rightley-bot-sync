@@ -1,0 +1,24 @@
+{
+  "resourceType": "Appointment",
+  "id": "apt-123",
+  "status": "booked",
+  "description": "Follow-up visit for hypertension",
+  "start": "2025-08-14T15:00:00Z",
+  "end": "2025-08-14T15:30:00Z",
+  "participant": [
+    {
+      "actor": {
+        "reference": "Patient/001",
+        "display": "Jane Doe"
+      },
+      "status": "accepted"
+    },
+    {
+      "actor": {
+        "reference": "Practitioner/777",
+        "display": "Dr. Smith"
+      },
+      "status": "accepted"
+    }
+  ]
+}

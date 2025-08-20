@@ -1,0 +1,22 @@
+{
+  "id": "freed_note_001",
+  "type": "soap",
+  "patient": {
+    "id": "001",
+    "name": "Jane Doe"
+  },
+  "subjective": "Patient reports improved energy over the past week. Still experiencing occasional headaches in the morning.",
+  "objective": "BP 128/78, HR 72. No acute distress. Alert and oriented x3.",
+  "assessment": [
+    {
+      "code": "I10",
+      "description": "Essential hypertension"
+    },
+    {
+      "code": "R51",
+      "description": "Headache"
+    }
+  ],
+  "plan": "Continue current antihypertensive medication. Monitor headaches. Recheck BP in 4 weeks.",
+  "createdAt": "2025-08-13T16:30:00Z"
+}

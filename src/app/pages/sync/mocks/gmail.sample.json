@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "id": "1876a9cafe",
+      "threadId": "t_01"
+    },
+    {
+      "id": "1876a9cb00",
+      "threadId": "t_02"
+    }
+  ],
+  "resultSizeEstimate": 2,
+  "nextPageToken": "next_page_token_here"
+}

@@ -3,6 +3,11 @@ import { redwood } from "rwsdk/vite";
 
 export default defineConfig({
   plugins: [redwood()],
+  server: {
+    port: Number(process.env.VITE_PORT) || 5173,
+    strictPort: true
+  },
+  preview: { port: 41837 },
   resolve: {
     conditions: ["react-server", "browser", "import", "default"]
   },

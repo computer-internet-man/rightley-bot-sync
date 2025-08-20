@@ -3,7 +3,7 @@
   "name": "ai-concierge-mvp",
   "main": "src/worker.tsx",
   "compatibility_date": "2024-09-23",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat_v2"],
   "assets": {
     "directory": "dist",
     "binding": "ASSETS"
@@ -50,7 +50,16 @@
     "SECURITY_ENABLE_GEO_BLOCKING": "false",
     "SECURITY_BLOCKED_COUNTRIES": "",
     "SECURITY_DDOS_THRESHOLD": "1000",
-    "SECURITY_ANOMALY_THRESHOLD": "50"
+    "SECURITY_ANOMALY_THRESHOLD": "50",
+    "ATHENA_CLIENT_ID": "",
+    "ATHENA_CLIENT_SECRET": "",
+    "ATHENA_PRACTICE_ID": "",
+    "GOOGLE_CLIENT_ID": "",
+    "GOOGLE_CLIENT_SECRET": "",
+    "SPRUCE_API_KEY": "",
+    "TODOIST_CLIENT_ID": "",
+    "TODOIST_CLIENT_SECRET": "",
+    "FREED_API_KEY": ""
   },
   "kv_namespaces": [
     {
