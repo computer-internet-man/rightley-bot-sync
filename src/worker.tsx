@@ -17,6 +17,7 @@ import { userRoutes } from "@/app/pages/user/routes";
 import { pageRoutes as syncPageRoutes, apiRoutes as syncApiRoutes } from "@/app/pages/sync/routes";
 import { validateCloudflareAccessJWT, findOrCreateUser } from "@/lib/auth";
 import { requireAuth, requireAdmin, requireDoctor, requireStaff, requireAuditor } from "@/middleware/requireRole";
+import { searchMcpPatients, convertMcpPatientToBrief } from "@/lib/mcpClient";
 import { type User, setupDb, drizzleDb } from "@/db";
 import { users as drizzleUsers, patientBriefs as drizzlePatientBriefs, doctorSettings as drizzleDoctorSettings, auditLogs as drizzleAuditLogs, messageQueue as drizzleMessageQueue } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
@@ -266,6 +267,28 @@ export default defineApp([
     console.log("[DEBUG/ENV] Environment check:", envInfo);
     
     return new Response(JSON.stringify(envInfo, null, 2), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }),
+
+  // Debug MCP environment
+  route("/debug/mcp-env", async ({ ctx }) => {
+    console.log("[DEBUG/MCP-ENV] Checking MCP environment variables");
+    
+    if (!ctx.user) {
+      return new Response(JSON.stringify({ success: false, error: 'Authentication required' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      envExists: typeof env !== 'undefined',
+      mcpKey: env.MCP_KEY ? '[SET]' : '[NOT SET]',
+      mcpServiceUrl: env.MCP_SERVICE_URL || '[NOT SET]',
+      allEnvKeys: Object.keys(env).filter(key => key.startsWith('MCP_'))
+    }, null, 2), {
       headers: { 'Content-Type': 'application/json' }
     });
   }),
@@ -2277,7 +2300,7 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
     });
   }),
 
-  // Patient brief search API
+  // Patient brief search API - combines local database and MCP service results
   route("/api/search-patient-briefs", async ({ request, ctx }) => {
     console.log("[API] Search patient briefs called");
     
@@ -2298,10 +2321,6 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
     try {
       const { query, filters } = await request.json();
       
-      // Perform search directly here
-      const { drizzleDb, users, patientBriefs } = await import('@/db');
-      const { eq, like, or, and, gte, lte, desc } = await import('drizzle-orm');
-      
       // If no query or filters, return empty results to avoid full table scan
       if (!query?.trim() && !Object.values(filters || {}).some(f => f && f.trim())) {
         return new Response(JSON.stringify({ success: true, briefs: [] }), {
@@ -2309,65 +2328,32 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
         });
       }
 
-      let whereConditions: any[] = [];
+      // Perform both database search and MCP search in parallel
+      const [databaseResults, mcpResults] = await Promise.allSettled([
+        searchDatabase(query, filters, ctx),
+        searchMcpService(query)
+      ]);
 
-      // Role-based access control
-      if (ctx.user.role === "doctor") {
-        whereConditions.push(eq(patientBriefs.doctorId, ctx.user.id));
+      let allBriefs: any[] = [];
+
+      // Add database results if successful
+      if (databaseResults.status === 'fulfilled') {
+        allBriefs.push(...databaseResults.value);
+      } else {
+        console.error("[API] Database search failed:", databaseResults.reason);
       }
 
-      // Search query
-      if (query?.trim()) {
-        const searchConditions = [
-          like(patientBriefs.patientName, `%${query}%`),
-          like(patientBriefs.briefText, `%${query}%`),
-          like(patientBriefs.currentMedications, `%${query}%`),
-          like(patientBriefs.allergies, `%${query}%`),
-        ];
-        whereConditions.push(or(...searchConditions));
+      // Add MCP results if successful
+      if (mcpResults.status === 'fulfilled') {
+        allBriefs.push(...mcpResults.value);
+      } else {
+        console.error("[API] MCP search failed:", mcpResults.reason);
       }
 
-      // Filters
-      if (filters?.doctorId && ctx.user.role === "admin") {
-        whereConditions.push(eq(patientBriefs.doctorId, filters.doctorId));
-      }
+      // Sort combined results by creation date (newest first)
+      allBriefs.sort((a, b) => new Date(b.createdAt || b.updatedAt).getTime() - new Date(a.createdAt || a.updatedAt).getTime());
 
-      if (filters?.startDate) {
-        whereConditions.push(gte(patientBriefs.updatedAt, new Date(filters.startDate)));
-      }
-
-      if (filters?.endDate) {
-        whereConditions.push(lte(patientBriefs.updatedAt, new Date(filters.endDate)));
-      }
-
-      const briefs = await drizzleDb
-        .select({
-          id: patientBriefs.id,
-          patientName: patientBriefs.patientName,
-          briefText: patientBriefs.briefText,
-          medicalHistory: patientBriefs.medicalHistory,
-          currentMedications: patientBriefs.currentMedications,
-          allergies: patientBriefs.allergies,
-          doctorNotes: patientBriefs.doctorNotes,
-          patientInquiry: patientBriefs.patientInquiry,
-          createdAt: patientBriefs.createdAt,
-          updatedAt: patientBriefs.updatedAt,
-          doctorId: patientBriefs.doctorId,
-          doctor: {
-            id: users.id,
-            username: users.username,
-            email: users.email,
-            role: users.role,
-            createdAt: users.createdAt,
-          }
-        })
-        .from(patientBriefs)
-        .leftJoin(users, eq(patientBriefs.doctorId, users.id))
-        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
-        .orderBy(desc(patientBriefs.updatedAt))
-        .limit(50); // Limit results
-
-      return new Response(JSON.stringify({ success: true, briefs }), {
+      return new Response(JSON.stringify({ success: true, briefs: allBriefs }), {
         headers: { 'Content-Type': 'application/json' }
       });
     } catch (error) {
@@ -2588,6 +2574,89 @@ ai_concierge_health_status{environment="${environment}"} 1 ${timestamp}
     }),
   ])
 ]);
+
+// Helper function to search the local database
+async function searchDatabase(query: string, filters: any, ctx: any) {
+  const { drizzleDb, users, patientBriefs } = await import('@/db');
+  const { eq, like, or, and, gte, lte, desc } = await import('drizzle-orm');
+  
+  let whereConditions: any[] = [];
+
+  // Role-based access control
+  if (ctx.user.role === "doctor") {
+    whereConditions.push(eq(patientBriefs.doctorId, ctx.user.id));
+  }
+
+  // Search query
+  if (query?.trim()) {
+    const searchConditions = [
+      like(patientBriefs.patientName, `%${query}%`),
+      like(patientBriefs.briefText, `%${query}%`),
+      like(patientBriefs.currentMedications, `%${query}%`),
+      like(patientBriefs.allergies, `%${query}%`),
+    ];
+    whereConditions.push(or(...searchConditions));
+  }
+
+  // Filters
+  if (filters?.doctorId && ctx.user.role === "admin") {
+    whereConditions.push(eq(patientBriefs.doctorId, filters.doctorId));
+  }
+
+  if (filters?.startDate) {
+    whereConditions.push(gte(patientBriefs.updatedAt, new Date(filters.startDate)));
+  }
+
+  if (filters?.endDate) {
+    whereConditions.push(lte(patientBriefs.updatedAt, new Date(filters.endDate)));
+  }
+
+  const briefs = await drizzleDb
+    .select({
+      id: patientBriefs.id,
+      patientName: patientBriefs.patientName,
+      briefText: patientBriefs.briefText,
+      medicalHistory: patientBriefs.medicalHistory,
+      currentMedications: patientBriefs.currentMedications,
+      allergies: patientBriefs.allergies,
+      doctorNotes: patientBriefs.doctorNotes,
+      patientInquiry: patientBriefs.patientInquiry,
+      createdAt: patientBriefs.createdAt,
+      updatedAt: patientBriefs.updatedAt,
+      doctorId: patientBriefs.doctorId,
+      doctor: {
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        role: users.role,
+        createdAt: users.createdAt,
+      }
+    })
+    .from(patientBriefs)
+    .leftJoin(users, eq(patientBriefs.doctorId, users.id))
+    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+    .orderBy(desc(patientBriefs.updatedAt))
+    .limit(25); // Limit to 25 since we're combining with MCP results
+
+  return briefs;
+}
+
+// Helper function to search MCP service and convert results
+async function searchMcpService(query: string) {
+  try {
+    // Only search MCP if we have the required environment variables
+    if (!env.MCP_KEY || !env.MCP_SERVICE_URL) {
+      console.log("[MCP] Skipping MCP search - missing environment variables");
+      return [];
+    }
+
+    const mcpPatients = await searchMcpPatients(query, env);
+    return mcpPatients.map(convertMcpPatientToBrief);
+  } catch (error) {
+    console.error("[MCP] Search failed:", error);
+    return []; // Return empty array on failure to allow fallback to database results
+  }
+}
 
 // Queue consumer handler for processing async jobs
 export const queue = async (

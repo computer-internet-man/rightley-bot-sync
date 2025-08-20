@@ -59,7 +59,9 @@
     "SPRUCE_API_KEY": "",
     "TODOIST_CLIENT_ID": "",
     "TODOIST_CLIENT_SECRET": "",
-    "FREED_API_KEY": ""
+    "FREED_API_KEY": "",
+    "MCP_SERVICE_URL": "https://athena-health-mcp-dev.rightley.workers.dev/mcp",
+    "MCP_KEY": ""
   },
   "kv_namespaces": [
     {
@@ -93,7 +95,9 @@
         "SENDGRID_API_KEY": "",
         "TWILIO_ACCOUNT_SID": "",
         "TWILIO_AUTH_TOKEN": "",
-        "WEBHOOK_SECRET": "test-secret-for-development"
+        "WEBHOOK_SECRET": "test-secret-for-development",
+        "MCP_SERVICE_URL": "https://athena-health-mcp-dev.rightley.workers.dev/mcp",
+        "MCP_KEY": "359b106e7aad49ed9037645f21b12ad8"
       },
       "d1_databases": [
         {

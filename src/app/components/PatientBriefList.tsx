@@ -111,12 +111,12 @@ export function PatientBriefList({
         bValue = b.patientName.toLowerCase();
         break;
       case "doctor":
-        aValue = a.doctor.email.toLowerCase();
-        bValue = b.doctor.email.toLowerCase();
+        aValue = a.doctor?.email?.toLowerCase() || "";
+        bValue = b.doctor?.email?.toLowerCase() || "";
         break;
       case "updatedAt":
-        aValue = new Date(a.updatedAt);
-        bValue = new Date(b.updatedAt);
+        aValue = new Date(a.updatedAt || a.createdAt);
+        bValue = new Date(b.updatedAt || b.createdAt);
         break;
       default:
         aValue = a[sortField];
@@ -178,16 +178,20 @@ export function PatientBriefList({
                 </div>
 
                 <div className="col-span-2">
-                  <p className="text-sm font-medium text-gray-900 truncate">{brief.doctor.email}</p>
-                  <p className="text-sm text-gray-500 truncate">{brief.doctor.username}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {brief.doctor?.email || brief.doctorName || "External"}
+                  </p>
+                  <p className="text-sm text-gray-500 truncate">
+                    {brief.doctor?.username || brief.doctorUsername || ""}
+                  </p>
                 </div>
 
                 <div className="col-span-2">
                   <p className="text-sm text-gray-900">
-                    {new Date(brief.updatedAt).toLocaleDateString()}
+                    {new Date(brief.updatedAt || brief.createdAt).toLocaleDateString()}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {new Date(brief.updatedAt).toLocaleTimeString()}
+                    {new Date(brief.updatedAt || brief.createdAt).toLocaleTimeString()}
                   </p>
                 </div>
 
