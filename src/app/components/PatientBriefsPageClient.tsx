@@ -83,6 +83,12 @@ export function PatientBriefsPageClient({ user, initialBriefs }: PatientBriefsPa
     setError(errorMessage);
   };
 
+  const handleClearSearch = () => {
+    setHasSearched(false);
+    setFilteredBriefs([]);
+    setError("");
+  };
+
   const closeForm = () => {
     setShowForm(false);
     setEditingBrief(null);
@@ -143,6 +149,7 @@ export function PatientBriefsPageClient({ user, initialBriefs }: PatientBriefsPa
         user={user}
         onResults={handleSearchResults}
         onError={handleSearchError}
+        onClear={handleClearSearch}
       />
 
       {/* Results Summary */}
